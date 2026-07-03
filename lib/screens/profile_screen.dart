@@ -1,10 +1,15 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:peakform_ai/config/supabase_config.dart';
 import 'package:peakform_ai/screens/analytics_screen.dart';
 import 'package:peakform_ai/screens/growth_hub_screen.dart';
 import 'package:peakform_ai/screens/settings_screen.dart';
 import 'package:peakform_ai/screens/sports_selection_screen.dart';
 import 'package:peakform_ai/services/profile_avatar_service.dart';
+import 'package:peakform_ai/services/supabase_service.dart';
+import 'package:peakform_ai/services/user_profile_service.dart';
 import 'package:peakform_ai/theme/app_colors.dart';
 import 'package:peakform_ai/widgets/peak_bottom_nav.dart';
 import 'package:peakform_ai/widgets/profile_avatar.dart';
@@ -20,19 +25,74 @@ class ProfileScreen extends StatefulWidget {
 
 class _ProfileScreenState extends State<ProfileScreen> {
   final ImagePicker _imagePicker = ImagePicker();
+  final FocusNode _nameFocusNode = FocusNode();
 
   late final TextEditingController _nameController;
+  String _lastSavedName = '';
 
   @override
   void initState() {
     super.initState();
-    _nameController = TextEditingController(text: 'Alex Rivera');
+    _lastSavedName = UserProfileService.instance.displayName;
+    _nameController = TextEditingController(text: _lastSavedName);
+    _nameFocusNode.addListener(_handleNameFocusChange);
+    UserProfileService.instance.profile.addListener(_syncNameFromProfile);
+    if (SupabaseConfig.isConfigured && SupabaseService.isSignedIn) {
+      UserProfileService.instance.loadCurrentProfile();
+    }
+  }
+
+  void _handleNameFocusChange() {
+    if (!_nameFocusNode.hasFocus) {
+      _saveNameIfNeeded();
+    }
+  }
+
+  void _syncNameFromProfile() {
+    final name = UserProfileService.instance.profile.value?.fullName;
+    if (name != null && name.isNotEmpty && _nameController.text != name) {
+      _nameController.text = name;
+      _lastSavedName = name;
+    }
   }
 
   @override
   void dispose() {
+    _saveNameIfNeeded();
+    UserProfileService.instance.profile.removeListener(_syncNameFromProfile);
+    _nameFocusNode.removeListener(_handleNameFocusChange);
+    _nameFocusNode.dispose();
     _nameController.dispose();
     super.dispose();
+  }
+
+  Future<void> _saveNameIfNeeded() async {
+    if (!SupabaseConfig.isConfigured || !SupabaseService.isSignedIn) return;
+
+    final name = _nameController.text.trim();
+    if (name.isEmpty || name == _lastSavedName) return;
+
+    try {
+      await UserProfileService.instance.updateFullName(name);
+      _lastSavedName = name;
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Name saved')),
+        );
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not save name')),
+        );
+      }
+    }
+  }
+
+  bool get _hasCustomAvatar {
+    if (ProfileAvatarService.instance.hasCustomAvatar) return true;
+    final remoteUrl = UserProfileService.instance.profile.value?.avatarUrl;
+    return remoteUrl != null && remoteUrl.isNotEmpty;
   }
 
   void _pushSubScreen(
@@ -105,7 +165,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   label: 'Take a Photo',
                   onTap: () => Navigator.of(context).pop(_PhotoPickAction.camera),
                 ),
-                if (ProfileAvatarService.instance.hasCustomAvatar) ...[
+                if (_hasCustomAvatar) ...[
                   const SizedBox(height: 8),
                   _photoOptionTile(
                     icon: Icons.delete_outline_rounded,
@@ -131,6 +191,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
           await _pickImage(ImageSource.camera);
         case _PhotoPickAction.remove:
           await ProfileAvatarService.instance.clearAvatar();
+          if (SupabaseConfig.isConfigured && SupabaseService.isSignedIn) {
+            await UserProfileService.instance.clearRemoteAvatar();
+          }
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(content: Text('Profile photo removed')),
@@ -157,6 +220,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (picked == null || !mounted) return;
 
     await ProfileAvatarService.instance.setLocalPath(picked.path);
+
+    if (SupabaseConfig.isConfigured && SupabaseService.isSignedIn) {
+      await UserProfileService.instance.uploadAvatar(File(picked.path));
+    }
+
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Profile photo updated')),
@@ -273,7 +341,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       iconBackground:
                           const Color(0xFFF97316).withValues(alpha: 0.2),
                       title: 'Sports Selection',
-                      description: 'Choose your sport & goals',
+                      description: 'Choose your sport & intensity',
                       onTap: () {
                         _pushSubScreen(
                           context,
@@ -352,6 +420,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 const SizedBox(height: 6),
                 TextField(
                   controller: _nameController,
+                  focusNode: _nameFocusNode,
+                  textInputAction: TextInputAction.done,
+                  onEditingComplete: _saveNameIfNeeded,
+                  onSubmitted: (_) => _saveNameIfNeeded(),
                   style: const TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.w700,

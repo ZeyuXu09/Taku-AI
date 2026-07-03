@@ -1,9 +1,16 @@
+import 'dart:io';
+import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart';
+import 'package:google_mlkit_pose_detection/google_mlkit_pose_detection.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:peakform_ai/theme/app_colors.dart';
+import 'package:peakform_ai/utils/pose_geometry.dart';
 import 'package:peakform_ai/widgets/peak_bottom_nav.dart';
+import 'package:peakform_ai/widgets/pose_overlay_painter.dart';
 import 'package:peakform_ai/widgets/progress_ring.dart';
 
-class AiCoachScreen extends StatelessWidget {
+class AiCoachScreen extends StatefulWidget {
   const AiCoachScreen({
     super.key,
     this.onBack,
@@ -15,6 +22,145 @@ class AiCoachScreen extends StatelessWidget {
 
   static const _athleteUrl =
       'https://images.unsplash.com/photo-1571019614242-c5c5dee9f50b?w=600&q=80';
+
+  @override
+  State<AiCoachScreen> createState() => _AiCoachScreenState();
+}
+
+class _AiCoachScreenState extends State<AiCoachScreen> {
+  late final ImagePicker _picker;
+  late final PoseDetector _poseDetector;
+
+  File? _image;
+  Pose? _pose;
+  double _imageWidth = 0;
+  double _imageHeight = 0;
+  bool _processing = false;
+  String? _errorMessage;
+
+  @override
+  void initState() {
+    super.initState();
+    _picker = ImagePicker();
+    _poseDetector = PoseDetector(
+      options: PoseDetectorOptions(
+        mode: PoseDetectionMode.single,
+        model: PoseDetectionModel.base,
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    _poseDetector.close();
+    super.dispose();
+  }
+
+  Future<void> _getImage(ImageSource source) async {
+    final pickedFile = await _picker.pickImage(source: source);
+    if (pickedFile == null) return;
+
+    setState(() {
+      _image = File(pickedFile.path);
+      _pose = null;
+      _errorMessage = null;
+    });
+
+    await _processImage();
+  }
+
+  Future<void> _processImage() async {
+    final image = _image;
+    if (image == null) return;
+
+    setState(() {
+      _processing = true;
+      _errorMessage = null;
+    });
+
+    try {
+      final bytes = await image.readAsBytes();
+      final codec = await ui.instantiateImageCodec(bytes);
+      final frame = await codec.getNextFrame();
+      final decodedWidth = frame.image.width.toDouble();
+      final decodedHeight = frame.image.height.toDouble();
+      frame.image.dispose();
+
+      final inputImage = InputImage.fromFilePath(image.path);
+      final poses = await _poseDetector.processImage(inputImage);
+
+      if (!mounted) return;
+
+      if (poses.isEmpty) {
+        setState(() {
+          _pose = null;
+          _imageWidth = decodedWidth;
+          _imageHeight = decodedHeight;
+          _errorMessage =
+              'No pose detected. Try an image with a clearly visible person.';
+        });
+        return;
+      }
+
+      setState(() {
+        _pose = poses.first;
+        _imageWidth = decodedWidth;
+        _imageHeight = decodedHeight;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _errorMessage = 'An error occurred when processing the image.';
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('An error occurred when processing the image'),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _processing = false);
+      }
+    }
+  }
+
+  double get _confidence => _pose == null ? 0 : averageLandmarkConfidence(_pose!);
+
+  Set<PoseLandmarkType> get _highlightTypes {
+    final leftKnee = _kneeAngles
+        .where((angle) => angle.label == 'Left Knee' && angle.isWarning)
+        .isNotEmpty;
+    if (leftKnee) {
+      return {
+        PoseLandmarkType.leftHip,
+        PoseLandmarkType.leftKnee,
+        PoseLandmarkType.leftAnkle,
+      };
+    }
+
+    final rightKnee = _kneeAngles
+        .where((angle) => angle.label == 'Right Knee' && angle.isWarning)
+        .isNotEmpty;
+    if (rightKnee) {
+      return {
+        PoseLandmarkType.rightHip,
+        PoseLandmarkType.rightKnee,
+        PoseLandmarkType.rightAnkle,
+      };
+    }
+
+    return const {};
+  }
+
+  List<JointAngle> get _kneeAngles =>
+      _pose == null ? const [] : kneeAnglesFromPose(_pose!);
+
+  JointAngle? _jointAngle(String label) {
+    for (final angle in _kneeAngles) {
+      if (angle.label == label) return angle;
+    }
+    return null;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -40,7 +186,7 @@ class AiCoachScreen extends StatelessWidget {
             ),
             PeakBottomNav(
               currentIndex: 2,
-              onTap: onNavTap ?? (_) {},
+              onTap: widget.onNavTap ?? (_) {},
             ),
           ],
         ),
@@ -80,7 +226,7 @@ class AiCoachScreen extends StatelessWidget {
             icon: Icons.arrow_back_ios_new_rounded,
             size: 32,
             iconSize: 16,
-            onTap: onBack ?? () => Navigator.of(context).pop(),
+            onTap: widget.onBack ?? () => Navigator.of(context).pop(),
           ),
           const Expanded(
             child: Text(
@@ -102,23 +248,25 @@ class AiCoachScreen extends StatelessWidget {
                     width: 6,
                     height: 6,
                     decoration: BoxDecoration(
-                      color: AppColors.green,
+                      color: _pose == null ? AppColors.textSecondary : AppColors.green,
                       shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(
-                          color: AppColors.green.withValues(alpha: 0.8),
-                          blurRadius: 8,
-                        ),
-                      ],
+                      boxShadow: _pose == null
+                          ? null
+                          : [
+                              BoxShadow(
+                                color: AppColors.green.withValues(alpha: 0.8),
+                                blurRadius: 8,
+                              ),
+                            ],
                     ),
                   ),
                   const SizedBox(width: 5),
-                  const Text(
-                    'LIVE',
+                  Text(
+                    _pose == null ? 'READY' : 'LIVE',
                     style: TextStyle(
                       fontSize: 10,
                       fontWeight: FontWeight.w700,
-                      color: AppColors.green,
+                      color: _pose == null ? AppColors.textSecondary : AppColors.green,
                       letterSpacing: 0.8,
                     ),
                   ),
@@ -174,12 +322,20 @@ class AiCoachScreen extends StatelessWidget {
           child: Stack(
             fit: StackFit.expand,
             children: [
-              Image.network(
-                _athleteUrl,
-                fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) =>
-                    Container(color: AppColors.card),
-              ),
+              if (_image != null)
+                Image.file(
+                  _image!,
+                  fit: BoxFit.contain,
+                  width: double.infinity,
+                  height: double.infinity,
+                )
+              else
+                Image.network(
+                  AiCoachScreen._athleteUrl,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) =>
+                      Container(color: AppColors.card),
+                ),
               Container(
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
@@ -193,16 +349,40 @@ class AiCoachScreen extends StatelessWidget {
                   ),
                 ),
               ),
-              const CustomPaint(painter: _PoseSkeletonPainter()),
+              if (_pose != null)
+                CustomPaint(
+                  painter: PoseOverlayPainter(
+                    pose: _pose!,
+                    imageWidth: _imageWidth,
+                    imageHeight: _imageHeight,
+                    highlightTypes: _highlightTypes,
+                  ),
+                )
+              else if (_image == null)
+                const CustomPaint(painter: _DemoPoseSkeletonPainter()),
+              if (_processing)
+                Container(
+                  color: AppColors.background.withValues(alpha: 0.55),
+                  child: const Center(
+                    child: CircularProgressIndicator(color: AppColors.accent),
+                  ),
+                ),
               Positioned(
                 top: 12,
                 left: 12,
-                child: _feedBadge('17 KEYPOINTS'),
+                child: _feedBadge(
+                  '${_pose?.landmarks.length ?? 0} KEYPOINTS',
+                ),
               ),
               Positioned(
                 top: 12,
                 right: 12,
-                child: _feedBadge('98% CONFIDENCE', color: AppColors.green),
+                child: _feedBadge(
+                  _pose == null
+                      ? 'AWAITING INPUT'
+                      : '${(_confidence * 100).round()}% CONFIDENCE',
+                  color: _pose == null ? null : AppColors.green,
+                ),
               ),
               Positioned(
                 left: 12,
@@ -221,19 +401,21 @@ class AiCoachScreen extends StatelessWidget {
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: RichText(
-                    text: const TextSpan(
-                      style: TextStyle(
+                    text: TextSpan(
+                      style: const TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
                         color: AppColors.yellow,
                         height: 1.4,
                       ),
                       children: [
-                        TextSpan(
+                        const TextSpan(
                           text: 'AI COACH: ',
                           style: TextStyle(fontWeight: FontWeight.w800),
                         ),
-                        TextSpan(text: 'Keep your left knee outward.'),
+                        TextSpan(
+                          text: _errorMessage ?? coachFeedbackForPose(_pose),
+                        ),
                       ],
                     ),
                   ),
@@ -246,11 +428,59 @@ class AiCoachScreen extends StatelessWidget {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    _feedStat('Stability', '95%'),
-                    _feedStat('Rep Count', '5 / 12'),
+                    _feedStat(
+                      'Stability',
+                      _pose == null ? '--' : '${(_confidence * 100).round()}%',
+                    ),
+                    _feedStat(
+                      'People',
+                      _pose == null ? '0' : '1',
+                    ),
                   ],
                 ),
               ),
+              if (_image == null && !_processing)
+                Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      _PickerButton(
+                        icon: Icons.photo_library_rounded,
+                        label: 'Gallery',
+                        onTap: () => _getImage(ImageSource.gallery),
+                      ),
+                      const SizedBox(height: 10),
+                      _PickerButton(
+                        icon: Icons.photo_camera_rounded,
+                        label: 'Camera',
+                        onTap: () => _getImage(ImageSource.camera),
+                      ),
+                    ],
+                  ),
+                ),
+              if (_image != null && !_processing)
+                Positioned(
+                  top: 12,
+                  left: 0,
+                  right: 0,
+                  child: Center(
+                    child: Wrap(
+                      spacing: 8,
+                      children: [
+                        _PickerChip(
+                          icon: Icons.photo_library_rounded,
+                          label: 'Gallery',
+                          onTap: () => _getImage(ImageSource.gallery),
+                        ),
+                        _PickerChip(
+                          icon: Icons.photo_camera_rounded,
+                          label: 'Camera',
+                          onTap: () => _getImage(ImageSource.camera),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
             ],
           ),
         ),
@@ -313,35 +543,44 @@ class AiCoachScreen extends StatelessWidget {
   }
 
   Widget _buildMetrics() {
+    final confidence = _confidence;
+    final rating = _pose == null ? '--' : formRatingLabel(confidence);
+    final progress = _pose == null ? 0.0 : confidence;
+    final ringColor =
+        confidence >= 0.75 ? AppColors.green : AppColors.yellow;
+
+    final leftKnee = _jointAngle('Left Knee');
+    final rightKnee = _jointAngle('Right Knee');
+
     return Padding(
       padding: const EdgeInsets.all(16),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           ProgressRing(
-            progress: 0.92,
+            progress: progress,
             size: 100,
             strokeWidth: 8,
-            color: AppColors.green,
-            center: const Column(
+            color: ringColor,
+            center: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                  '92',
-                  style: TextStyle(
+                  _pose == null ? '--' : '${(confidence * 100).round()}',
+                  style: const TextStyle(
                     fontSize: 26,
                     fontWeight: FontWeight.w800,
                     color: AppColors.textPrimary,
                     height: 1,
                   ),
                 ),
-                SizedBox(height: 2),
+                const SizedBox(height: 2),
                 Text(
-                  'EXCELLENT',
+                  rating,
                   style: TextStyle(
                     fontSize: 9,
                     fontWeight: FontWeight.w700,
-                    color: AppColors.green,
+                    color: ringColor,
                     letterSpacing: 0.8,
                   ),
                 ),
@@ -363,9 +602,17 @@ class AiCoachScreen extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 10),
-                _jointCard('Left Knee', '78°', isWarning: true),
+                _jointCard(
+                  'Left Knee',
+                  leftKnee == null ? '--' : '${leftKnee.degrees.round()}°',
+                  isWarning: leftKnee?.isWarning ?? false,
+                ),
                 const SizedBox(height: 8),
-                _jointCard('Right Knee', '92°', isWarning: false),
+                _jointCard(
+                  'Right Knee',
+                  rightKnee == null ? '--' : '${rightKnee.degrees.round()}°',
+                  isWarning: rightKnee?.isWarning ?? false,
+                ),
               ],
             ),
           ),
@@ -409,8 +656,92 @@ class AiCoachScreen extends StatelessWidget {
   }
 }
 
-class _PoseSkeletonPainter extends CustomPainter {
-  const _PoseSkeletonPainter();
+class _PickerButton extends StatelessWidget {
+  const _PickerButton({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: AppColors.card.withValues(alpha: 0.92),
+      borderRadius: BorderRadius.circular(14),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(14),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 18, color: AppColors.textPrimary),
+              const SizedBox(width: 8),
+              Text(
+                label,
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PickerChip extends StatelessWidget {
+  const _PickerChip({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: AppColors.background.withValues(alpha: 0.8),
+      borderRadius: BorderRadius.circular(20),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(20),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 14, color: AppColors.textPrimary),
+              const SizedBox(width: 6),
+              Text(
+                label,
+                style: const TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _DemoPoseSkeletonPainter extends CustomPainter {
+  const _DemoPoseSkeletonPainter();
 
   static const _viewWidth = 300.0;
   static const _viewHeight = 400.0;
@@ -449,11 +780,10 @@ class _PoseSkeletonPainter extends CustomPainter {
     Offset point(double x, double y) => Offset(x * scaleX, y * scaleY);
 
     final linePaint = Paint()
-      ..color = AppColors.green
+      ..color = AppColors.green.withValues(alpha: 0.45)
       ..strokeWidth = 2.5
       ..strokeCap = StrokeCap.round
-      ..style = PaintingStyle.stroke
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2);
+      ..style = PaintingStyle.stroke;
 
     for (final line in _lines) {
       canvas.drawLine(
@@ -464,13 +794,10 @@ class _PoseSkeletonPainter extends CustomPainter {
     }
 
     for (final joint in _joints) {
-      final color = joint.$4 ? AppColors.yellow : AppColors.green;
-      final paint = Paint()
-        ..color = color
-        ..maskFilter = MaskFilter.blur(
-          BlurStyle.normal,
-          joint.$4 ? 4 : 3,
-        );
+      final color = joint.$4
+          ? AppColors.yellow.withValues(alpha: 0.45)
+          : AppColors.green.withValues(alpha: 0.45);
+      final paint = Paint()..color = color;
       canvas.drawCircle(
         point(joint.$1, joint.$2),
         joint.$3 * ((scaleX + scaleY) / 2),

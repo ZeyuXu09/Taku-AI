@@ -26,10 +26,13 @@ class ProfileAvatarService {
     }
   }
 
-  ImageProvider avatarImage([String? path]) {
-    final resolvedPath = path ?? localPath.value;
+  ImageProvider avatarImage({String? localPath, String? remoteUrl}) {
+    final resolvedPath = localPath ?? this.localPath.value;
     if (resolvedPath != null && File(resolvedPath).existsSync()) {
       return FileImage(File(resolvedPath));
+    }
+    if (remoteUrl != null && remoteUrl.isNotEmpty) {
+      return NetworkImage(remoteUrl);
     }
     return NetworkImage(defaultAvatarUrl);
   }

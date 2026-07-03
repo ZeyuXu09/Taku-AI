@@ -1,7 +1,18 @@
 import 'package:flutter/material.dart';
+import 'package:peakform_ai/models/training_exercise.dart';
+import 'package:peakform_ai/models/training_session.dart';
+import 'package:peakform_ai/screens/active_workout_screen.dart';
 import 'package:peakform_ai/screens/ai_coach_screen.dart';
+import 'package:peakform_ai/screens/exercise_detail_screen.dart';
+import 'package:peakform_ai/models/training_location.dart';
+import 'package:peakform_ai/services/training_plan_service.dart';
+import 'package:peakform_ai/services/training_preferences_service.dart';
+import 'package:peakform_ai/services/training_session_override_service.dart';
 import 'package:peakform_ai/theme/app_colors.dart';
+import 'package:peakform_ai/widgets/change_focus_sheet.dart';
+import 'package:peakform_ai/widgets/customize_workout_sheet.dart';
 import 'package:peakform_ai/widgets/peak_bottom_nav.dart';
+import 'package:peakform_ai/widgets/training_location_toggle.dart';
 
 class TrainingScreen extends StatelessWidget {
   const TrainingScreen({
@@ -13,37 +24,42 @@ class TrainingScreen extends StatelessWidget {
   final VoidCallback? onBack;
   final ValueChanged<int>? onNavTap;
 
-  static const _exercises = [
-    _Exercise(
-      name: 'Lateral Shuttle Runs',
-      detail: '4 sets × 30 sec · 1 min rest',
-      imageUrl:
-          'https://images.unsplash.com/photo-1517836357463-d25dfeac3438?w=120&h=120&fit=crop',
-    ),
-    _Exercise(
-      name: 'Box Jumps',
-      detail: '3 sets × 10 reps · 90 sec rest',
-      imageUrl:
-          'https://images.unsplash.com/photo-1574680096145-d05b474e2aae?w=120&h=120&fit=crop',
-    ),
-    _Exercise(
-      name: 'Agility Ladder Drills',
-      detail: '4 sets × 45 sec · 45 sec rest',
-      imageUrl:
-          'https://images.unsplash.com/photo-1599058945522-28d584b6f53f?w=120&h=120&fit=crop',
-    ),
-    _Exercise(
-      name: 'Single-Leg Squats',
-      detail: '3 sets × 12 reps · 60 sec rest',
-      imageUrl:
-          'https://images.unsplash.com/photo-1434682881345-18ba6925622a?w=120&h=120&fit=crop',
-    ),
-  ];
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder(
+      valueListenable: TrainingSessionOverrideService.instance.changes,
+      builder: (context, _, __) {
+        return ValueListenableBuilder(
+          valueListenable: TrainingPreferencesService.instance.preferences,
+          builder: (context, _, __) {
+            final session = TrainingPlanService.instance.todaySession();
+            final location =
+                TrainingPreferencesService.instance.preferences.value.location;
+            return _TrainingBody(
+              session: session,
+              location: location,
+              onBack: onBack,
+              onNavTap: onNavTap,
+            );
+          },
+        );
+      },
+    );
+  }
+}
 
-  static const _routines = [
-    _Routine(name: 'Spinal Decompression Hang', duration: '2 min'),
-    _Routine(name: 'Cobra Stretch', duration: '1 min'),
-  ];
+class _TrainingBody extends StatelessWidget {
+  const _TrainingBody({
+    required this.session,
+    required this.location,
+    this.onBack,
+    this.onNavTap,
+  });
+
+  final TrainingSession session;
+  final TrainingLocation location;
+  final VoidCallback? onBack;
+  final ValueChanged<int>? onNavTap;
 
   @override
   Widget build(BuildContext context) {
@@ -54,36 +70,51 @@ class TrainingScreen extends StatelessWidget {
         child: Column(
           children: [
             Expanded(
-              child: Stack(
-                children: [
-                  SingleChildScrollView(
-                    padding: const EdgeInsets.fromLTRB(20, 16, 20, 120),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _buildHeader(context),
-                        const SizedBox(height: 20),
-                        _buildFocusCard(),
-                        const SizedBox(height: 24),
-                        _sectionTitle('Exercises'),
-                        const SizedBox(height: 12),
-                        ..._exercises.map(_buildExerciseItem),
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildHeader(context),
+                    const SizedBox(height: 20),
+                    _buildFocusCard(context, session, location),
+                    if (session.isRestDay) ...[
+                      const SizedBox(height: 24),
+                      _buildSectionHeader(
+                        context,
+                        title: 'Recovery',
+                      ),
+                      const SizedBox(height: 12),
+                      ...session.routines.map(
+                        (routine) => _buildRoutineItem(context, routine),
+                      ),
+                    ] else ...[
+                      const SizedBox(height: 24),
+                      _buildExercisesHeader(context),
+                      const SizedBox(height: 12),
+                      ...session.exercises.map(
+                        (exercise) => _buildExerciseItem(
+                          context,
+                          exercise,
+                          key: ValueKey(exercise.exercise.id),
+                        ),
+                      ),
+                      if (session.routines.isNotEmpty) ...[
                         const SizedBox(height: 24),
                         _sectionTitle("Today's Routine"),
                         const SizedBox(height: 12),
-                        ..._routines.map(_buildRoutineItem),
+                        ...session.routines.map(
+                          (routine) => _buildRoutineItem(context, routine),
+                        ),
                       ],
-                    ),
-                  ),
-                  Positioned(
-                    left: 0,
-                    right: 0,
-                    bottom: 0,
-                    child: _buildCoachCta(context),
-                  ),
-                ],
+                    ],
+                  ],
+                ),
               ),
             ),
+            if ((!session.isRestDay && _hasWorkoutItems(session)) ||
+                (session.isRestDay && session.routines.isNotEmpty))
+              _buildWorkoutActions(context),
             PeakBottomNav(
               currentIndex: 2,
               onTap: onNavTap ?? (_) {},
@@ -120,17 +151,33 @@ class TrainingScreen extends StatelessWidget {
         ),
         Row(
           children: [
-            _IconBoxButton(icon: Icons.search_rounded, onTap: () {}),
+            const TrainingLocationToggle(),
             const SizedBox(width: 8),
-            _IconBoxButton(icon: Icons.filter_list_rounded, onTap: () {}),
+            _IconBoxButton(
+              icon: Icons.tune_rounded,
+              onTap: () => _openCustomize(context),
+            ),
           ],
         ),
       ],
     );
   }
 
-  Widget _buildFocusCard() {
-    return Container(
+  void _openChangeFocus(BuildContext context) {
+    showChangeFocusSheet(context, session: session);
+  }
+
+  Widget _buildFocusCard(
+    BuildContext context,
+    TrainingSession session,
+    TrainingLocation location,
+  ) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () => _openChangeFocus(context),
+        borderRadius: BorderRadius.circular(20),
+        child: Container(
       width: double.infinity,
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -145,19 +192,76 @@ class TrainingScreen extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            "TODAY'S FOCUS",
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w700,
-              color: AppColors.yellow,
-              letterSpacing: 1.2,
-            ),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  session.isRestDay ? 'REST DAY' : "TODAY'S FOCUS",
+                  style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.yellow,
+                    letterSpacing: 1.2,
+                  ),
+                ),
+              ),
+              if (session.isFocusCustomized)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: AppColors.yellow.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: AppColors.yellow.withValues(alpha: 0.35),
+                    ),
+                  ),
+                  child: const Text(
+                    'Custom',
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.yellow,
+                    ),
+                  ),
+                ),
+              if (session.isFocusCustomized) const SizedBox(width: 6),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: AppColors.accent.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: AppColors.accent.withValues(alpha: 0.35),
+                  ),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      location == TrainingLocation.gym
+                          ? Icons.fitness_center_rounded
+                          : Icons.home_rounded,
+                      size: 11,
+                      color: AppColors.accent,
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      location.label,
+                      style: const TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.accent,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 8),
-          const Text(
-            'Pre-Game Agility',
-            style: TextStyle(
+          Text(
+            session.title,
+            style: const TextStyle(
               fontSize: 24,
               fontWeight: FontWeight.w800,
               color: AppColors.textPrimary,
@@ -170,8 +274,11 @@ class TrainingScreen extends StatelessWidget {
             runSpacing: 8,
             crossAxisAlignment: WrapCrossAlignment.center,
             children: [
-              _focusStat(Icons.schedule_rounded, '45 min'),
-              _focusStat(Icons.local_fire_department_rounded, '350 cal'),
+              _focusStat(Icons.schedule_rounded, '${session.durationMinutes} min'),
+              _focusStat(
+                Icons.local_fire_department_rounded,
+                '${session.estimatedCalories} cal',
+              ),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
                 decoration: BoxDecoration(
@@ -181,9 +288,9 @@ class TrainingScreen extends StatelessWidget {
                   ),
                   borderRadius: BorderRadius.circular(20),
                 ),
-                child: const Text(
-                  'Medium-High',
-                  style: TextStyle(
+                child: Text(
+                  session.intensity.effortBadge,
+                  style: const TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.w600,
                     color: AppColors.green,
@@ -194,28 +301,55 @@ class TrainingScreen extends StatelessWidget {
           ),
           const SizedBox(height: 14),
           RichText(
-            text: const TextSpan(
-              style: TextStyle(
+            text: TextSpan(
+              style: const TextStyle(
                 fontSize: 13,
                 height: 1.5,
                 color: AppColors.textSecondary,
               ),
               children: [
-                TextSpan(
+                const TextSpan(
                   text: 'Program: ',
                   style: TextStyle(
                     fontWeight: FontWeight.w600,
                     color: AppColors.textTertiary,
                   ),
                 ),
-                TextSpan(
-                  text:
-                      'Agility & Speed. An integrated boost to your next game.',
+                TextSpan(text: session.programDescription),
+                const TextSpan(text: '\n'),
+                const TextSpan(
+                  text: 'Sports: ',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textTertiary,
+                  ),
                 ),
+                TextSpan(text: session.sportSummary),
               ],
             ),
           ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Icon(
+                Icons.swap_horiz_rounded,
+                size: 16,
+                color: AppColors.accent.withValues(alpha: 0.9),
+              ),
+              const SizedBox(width: 6),
+              Text(
+                'Change focus',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.accent.withValues(alpha: 0.95),
+                ),
+              ),
+            ],
+          ),
         ],
+      ),
+        ),
       ),
     );
   }
@@ -238,6 +372,35 @@ class TrainingScreen extends StatelessWidget {
     );
   }
 
+  void _openCustomize(BuildContext context) {
+    showCustomizeWorkoutSheet(context, session: session);
+  }
+
+  Widget _buildExercisesHeader(BuildContext context) {
+    return _buildSectionHeader(context, title: 'Exercises');
+  }
+
+  Widget _buildSectionHeader(BuildContext context, {required String title}) {
+    return Row(
+      children: [
+        Expanded(child: _sectionTitle(title)),
+        TextButton.icon(
+          onPressed: () => _openCustomize(context),
+          icon: const Icon(Icons.tune_rounded, size: 16),
+          label: const Text('Customize'),
+          style: TextButton.styleFrom(
+            foregroundColor: AppColors.accent,
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            textStyle: const TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _sectionTitle(String title) {
     return Text(
       title,
@@ -249,202 +412,250 @@ class TrainingScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildExerciseItem(_Exercise exercise) {
+  Widget _buildExerciseItem(
+    BuildContext context,
+    ScheduledExercise exercise, {
+    Key? key,
+  }) {
     return Padding(
+      key: key,
       padding: const EdgeInsets.only(bottom: 10),
-      child: Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: AppColors.card,
+      child: Material(
+        color: AppColors.card,
+        shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: AppColors.cardBorder),
+          side: const BorderSide(color: AppColors.cardBorder),
         ),
-        child: Row(
-          children: [
-            ClipRRect(
-              borderRadius: BorderRadius.circular(12),
-              child: Image.network(
-                exercise.imageUrl,
-                width: 56,
-                height: 56,
-                fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => Container(
-                  width: 56,
-                  height: 56,
-                  color: AppColors.barTrack,
-                  child: const Icon(
-                    Icons.fitness_center_rounded,
-                    color: AppColors.textSecondary,
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: () => openExerciseDetail(context, exercise),
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Row(
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: exercise.imageUrl != null
+                      ? Image.network(
+                          exercise.imageUrl!,
+                          width: 56,
+                          height: 56,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => _exercisePlaceholder(),
+                        )
+                      : _exercisePlaceholder(),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        exercise.name,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.textPrimary,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        exercise.prescription,
+                        style: const TextStyle(
+                          fontSize: 11,
+                          color: AppColors.textSecondary,
+                          height: 1.4,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-              ),
+                _InfoButton(
+                  onTap: () => openExerciseDetail(context, exercise),
+                ),
+              ],
             ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    exercise.name,
-                    style: const TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.textPrimary,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    exercise.detail,
-                    style: const TextStyle(
-                      fontSize: 11,
-                      color: AppColors.textSecondary,
-                      height: 1.4,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            _PlayButton(onTap: () {}),
-          ],
+          ),
         ),
       ),
     );
   }
 
-  Widget _buildRoutineItem(_Routine routine) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        decoration: BoxDecoration(
-          color: AppColors.card,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: AppColors.cardBorder),
-        ),
-        child: Row(
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    routine.name,
-                    style: const TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.textPrimary,
-                    ),
-                  ),
-                  const SizedBox(height: 3),
-                  Text(
-                    routine.duration,
-                    style: const TextStyle(
-                      fontSize: 11,
-                      color: AppColors.textSecondary,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            _PlayButton(onTap: () {}),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildCoachCta(BuildContext context) {
+  Widget _exercisePlaceholder() {
     return Container(
-      padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.bottomCenter,
-          end: Alignment.topCenter,
-          colors: [
-            AppColors.background,
-            Color(0xCC0B0E11),
-            Colors.transparent,
-          ],
-          stops: [0.0, 0.55, 1.0],
-        ),
+      width: 56,
+      height: 56,
+      color: AppColors.barTrack,
+      child: const Icon(
+        Icons.fitness_center_rounded,
+        color: AppColors.textSecondary,
       ),
-      child: DecoratedBox(
-        decoration: BoxDecoration(
+    );
+  }
+
+  Widget _buildRoutineItem(BuildContext context, ScheduledExercise routine) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Material(
+        color: AppColors.card,
+        shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),
-          gradient: const LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [AppColors.accent, Color(0xFF764BA2)],
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: AppColors.accent.withValues(alpha: 0.35),
-              blurRadius: 24,
-              offset: Offset(0, 8),
-            ),
-          ],
+          side: const BorderSide(color: AppColors.cardBorder),
         ),
-        child: Material(
-          color: Colors.transparent,
-          child: InkWell(
-            onTap: () {
-              Navigator.of(context).push(
-                MaterialPageRoute<void>(
-                  builder: (routeContext) => AiCoachScreen(
-                    onBack: () => Navigator.of(routeContext).pop(),
-                    onNavTap: (index) {
-                      Navigator.of(routeContext).pop();
-                      WidgetsBinding.instance.addPostFrameCallback((_) {
-                        onNavTap?.call(index);
-                      });
-                    },
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: () => openExerciseDetail(context, routine),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        routine.name,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.textPrimary,
+                        ),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        routine.prescription,
+                        style: const TextStyle(
+                          fontSize: 11,
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-              );
-            },
-            borderRadius: BorderRadius.circular(16),
-            child: const Padding(
-              padding: EdgeInsets.symmetric(vertical: 16),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.bolt_rounded, color: Colors.white, size: 20),
-                  SizedBox(width: 10),
-                  Text(
-                    'Start Workout with AI Coach',
-                    style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w700,
-                      color: Colors.white,
-                    ),
-                  ),
-                ],
-              ),
+                _InfoButton(
+                  onTap: () => openExerciseDetail(context, routine),
+                ),
+              ],
             ),
           ),
         ),
       ),
     );
   }
-}
 
-class _Exercise {
-  const _Exercise({
-    required this.name,
-    required this.detail,
-    required this.imageUrl,
-  });
+  bool _hasWorkoutItems(TrainingSession session) {
+    return session.exercises.isNotEmpty || session.routines.isNotEmpty;
+  }
 
-  final String name;
-  final String detail;
-  final String imageUrl;
-}
-
-class _Routine {
-  const _Routine({required this.name, required this.duration});
-
-  final String name;
-  final String duration;
+  Widget _buildWorkoutActions(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          DecoratedBox(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(16),
+              gradient: const LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [AppColors.green, Color(0xFF00C853)],
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: AppColors.green.withValues(alpha: 0.35),
+                  blurRadius: 24,
+                  offset: Offset(0, 8),
+                ),
+              ],
+            ),
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: () => openActiveWorkout(context, session: session),
+                borderRadius: BorderRadius.circular(16),
+                child: const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 16),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.play_arrow_rounded, color: AppColors.background, size: 22),
+                      SizedBox(width: 10),
+                      Text(
+                        'Start Workout',
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.background,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+          DecoratedBox(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(16),
+              gradient: const LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [AppColors.accent, Color(0xFF764BA2)],
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: AppColors.accent.withValues(alpha: 0.35),
+                  blurRadius: 24,
+                  offset: Offset(0, 8),
+                ),
+              ],
+            ),
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (routeContext) => AiCoachScreen(
+                        onBack: () => Navigator.of(routeContext).pop(),
+                        onNavTap: (index) {
+                          Navigator.of(routeContext).pop();
+                          WidgetsBinding.instance.addPostFrameCallback((_) {
+                            onNavTap?.call(index);
+                          });
+                        },
+                      ),
+                    ),
+                  );
+                },
+                borderRadius: BorderRadius.circular(16),
+                child: const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 14),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.bolt_rounded, color: Colors.white, size: 20),
+                      SizedBox(width: 10),
+                      Text(
+                        'Start with AI Coach',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _IconBoxButton extends StatelessWidget {
@@ -481,8 +692,8 @@ class _IconBoxButton extends StatelessWidget {
   }
 }
 
-class _PlayButton extends StatelessWidget {
-  const _PlayButton({this.onTap});
+class _InfoButton extends StatelessWidget {
+  const _InfoButton({this.onTap});
 
   final VoidCallback? onTap;
 
@@ -498,9 +709,9 @@ class _PlayButton extends StatelessWidget {
           width: 36,
           height: 36,
           child: Icon(
-            Icons.play_arrow_rounded,
+            Icons.info_outline_rounded,
             color: AppColors.accent,
-            size: 22,
+            size: 20,
           ),
         ),
       ),

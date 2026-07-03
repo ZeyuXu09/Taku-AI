@@ -4,6 +4,10 @@ import 'package:peakform_ai/screens/nutrition_screen.dart';
 import 'package:peakform_ai/screens/profile_screen.dart';
 import 'package:peakform_ai/screens/schedule_screen.dart';
 import 'package:peakform_ai/screens/training_screen.dart';
+import 'package:peakform_ai/services/game_schedule_service.dart';
+import 'package:peakform_ai/services/nutrition_log_service.dart';
+import 'package:peakform_ai/services/training_preferences_service.dart';
+import 'package:peakform_ai/services/training_session_override_service.dart';
 
 class AppShell extends StatefulWidget {
   const AppShell({super.key, this.initialIndex = 0});
@@ -21,6 +25,10 @@ class _AppShellState extends State<AppShell> {
   void initState() {
     super.initState();
     _currentIndex = widget.initialIndex;
+    GameScheduleService.instance.loadGames();
+    NutritionLogService.instance.loadLogs();
+    TrainingPreferencesService.instance.load();
+    TrainingSessionOverrideService.instance.load();
   }
 
   void _onNavTap(int index) {

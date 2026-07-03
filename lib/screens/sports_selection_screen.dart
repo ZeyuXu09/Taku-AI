@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:peakform_ai/data/sport_catalog.dart';
+import 'package:peakform_ai/models/training_intensity.dart';
+import 'package:peakform_ai/services/training_preferences_service.dart';
 import 'package:peakform_ai/theme/app_colors.dart';
 import 'package:peakform_ai/widgets/peak_bottom_nav.dart';
 
@@ -14,25 +17,45 @@ class SportsSelectionScreen extends StatefulWidget {
 
 class _SportsSelectionScreenState extends State<SportsSelectionScreen> {
   final Set<int> _selectedSports = {0};
-  final Set<int> _selectedGoals = {0, 1, 2};
+  int _selectedIntensity = 1;
 
-  static const _sports = [
-    ('🏀', 'Basketball'),
-    ('🏈', 'Football'),
-    ('⚽', 'Soccer'),
-    ('⚾', 'Baseball'),
-    ('🎾', 'Tennis'),
-    ('🏸', 'Badminton'),
-    ('🏃', 'Track & Field'),
-    ('🏐', 'Volleyball'),
-    ('💪', 'Basic Workout'),
+  static const _sports = SportCatalog.sports;
+
+  static const _intensityLevels = [
+    ('🙂', 'Casual', Color(0xFF60A5FA)),
+    ('🔥', 'Serious', Color(0xFFF97316)),
+    ('🏆', 'Professional', Color(0xFFFFD600)),
   ];
 
-  static const _goals = [
-    ('🏆', 'Improve Game Performance', Color(0xFFFFD600)),
-    ('🏋️', 'Build Strength & Power', Color(0xFFF97316)),
-    ('🌿', 'Optimize Nutrition', AppColors.green),
-  ];
+  @override
+  void initState() {
+    super.initState();
+    _loadSavedPreferences();
+  }
+
+  Future<void> _loadSavedPreferences() async {
+    await TrainingPreferencesService.instance.load();
+    final prefs = TrainingPreferencesService.instance.preferences.value;
+    if (!mounted) return;
+
+    final selected = <int>{};
+    for (var i = 0; i < _sports.length; i++) {
+      if (prefs.sports.contains(_sports[i].name)) {
+        selected.add(i);
+      }
+    }
+
+    setState(() {
+      _selectedSports
+        ..clear()
+        ..addAll(selected.isEmpty ? {0} : selected);
+      _selectedIntensity = switch (prefs.intensity) {
+        TrainingIntensity.casual => 0,
+        TrainingIntensity.serious => 1,
+        TrainingIntensity.professional => 2,
+      };
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -61,9 +84,9 @@ class _SportsSelectionScreenState extends State<SportsSelectionScreen> {
                     const SizedBox(height: 12),
                     _buildSportsGrid(),
                     const SizedBox(height: 24),
-                    _sectionTitle('Set Your Goals'),
+                    _sectionTitle('Choose Your Intensity'),
                     const SizedBox(height: 12),
-                    ...List.generate(_goals.length, _buildGoalItem),
+                    ...List.generate(_intensityLevels.length, _buildIntensityItem),
                     const SizedBox(height: 24),
                     _buildCta(context),
                   ],
@@ -144,11 +167,11 @@ class _SportsSelectionScreenState extends State<SportsSelectionScreen> {
         crossAxisCount: 3,
         mainAxisSpacing: 10,
         crossAxisSpacing: 10,
-        childAspectRatio: 0.85,
+        childAspectRatio: 0.78,
       ),
       itemCount: _sports.length,
       itemBuilder: (context, index) {
-        final (emoji, name) = _sports[index];
+        final sport = _sports[index];
         final selected = _selectedSports.contains(index);
 
         return Material(
@@ -178,18 +201,36 @@ class _SportsSelectionScreenState extends State<SportsSelectionScreen> {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Text(emoji, style: const TextStyle(fontSize: 26)),
-                const SizedBox(height: 8),
-                Text(
-                  name,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w600,
+                Image.asset(
+                  sport.assetPath,
+                  width: 56,
+                  height: 56,
+                  fit: BoxFit.contain,
+                  filterQuality: FilterQuality.medium,
+                  errorBuilder: (_, __, ___) => Icon(
+                    Icons.sports_rounded,
+                    size: 44,
                     color: selected
                         ? AppColors.textPrimary
-                        : AppColors.textTertiary,
-                    height: 1.2,
+                        : AppColors.textSecondary,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  child: Text(
+                    sport.name,
+                    textAlign: TextAlign.center,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w600,
+                      color: selected
+                          ? AppColors.textPrimary
+                          : AppColors.textTertiary,
+                      height: 1.2,
+                    ),
                   ),
                 ),
               ],
@@ -200,14 +241,9 @@ class _SportsSelectionScreenState extends State<SportsSelectionScreen> {
     );
   }
 
-  Widget _buildGoalItem(int index) {
-    final (emoji, label, _) = _goals[index];
-    final selected = _selectedGoals.contains(index);
-    final bgColors = [
-      AppColors.yellow.withValues(alpha: 0.15),
-      const Color(0xFFF97316).withValues(alpha: 0.2),
-      AppColors.green.withValues(alpha: 0.15),
-    ];
+  Widget _buildIntensityItem(int index) {
+    final (emoji, label, accentColor) = _intensityLevels[index];
+    final selected = _selectedIntensity == index;
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
@@ -223,15 +259,7 @@ class _SportsSelectionScreenState extends State<SportsSelectionScreen> {
           ),
         ),
         child: InkWell(
-          onTap: () {
-            setState(() {
-              if (selected) {
-                _selectedGoals.remove(index);
-              } else {
-                _selectedGoals.add(index);
-              }
-            });
-          },
+          onTap: () => setState(() => _selectedIntensity = index),
           borderRadius: BorderRadius.circular(16),
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
@@ -242,7 +270,7 @@ class _SportsSelectionScreenState extends State<SportsSelectionScreen> {
                   height: 38,
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
-                    color: bgColors[index],
+                    color: accentColor.withValues(alpha: 0.2),
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: Text(emoji, style: const TextStyle(fontSize: 18)),
@@ -305,7 +333,25 @@ class _SportsSelectionScreenState extends State<SportsSelectionScreen> {
       child: Material(
         color: Colors.transparent,
         child: InkWell(
-          onTap: () {
+          onTap: () async {
+            final sports = _selectedSports.isEmpty
+                ? [SportCatalog.defaultSport]
+                : _selectedSports
+                    .map((index) => _sports[index].name)
+                    .toList();
+            final intensity = switch (_selectedIntensity) {
+              0 => TrainingIntensity.casual,
+              2 => TrainingIntensity.professional,
+              _ => TrainingIntensity.serious,
+            };
+
+            await TrainingPreferencesService.instance.save(
+              sports: sports,
+              intensity: intensity,
+            );
+
+            if (!context.mounted) return;
+
             if (widget.onNavTap != null) {
               widget.onNavTap!(0);
             } else {

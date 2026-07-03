@@ -1,7 +1,17 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
+import 'package:peakform_ai/models/nutrition_log.dart';
+import 'package:peakform_ai/models/scheduled_game.dart';
+import 'package:peakform_ai/services/game_schedule_service.dart';
+import 'package:peakform_ai/services/nutrition_log_service.dart';
+import 'package:peakform_ai/services/training_plan_service.dart';
+import 'package:peakform_ai/services/training_preferences_service.dart';
+import 'package:peakform_ai/services/training_session_override_service.dart';
+import 'package:peakform_ai/services/user_profile_service.dart';
 import 'package:peakform_ai/theme/app_colors.dart';
+import 'package:peakform_ai/utils/game_format.dart';
 import 'package:peakform_ai/widgets/peak_bottom_nav.dart';
 import 'package:peakform_ai/widgets/profile_avatar.dart';
 
@@ -17,6 +27,28 @@ class HomeScreen extends StatelessWidget {
 
   static const _workoutImageUrl =
       'https://images.unsplash.com/photo-1571019614242-c5c5dee9f50b?w=600&q=80';
+
+  static final _numberFormat = NumberFormat('#,###');
+
+  static DateTime _today() {
+    final now = DateTime.now();
+    return DateTime(now.year, now.month, now.day);
+  }
+
+  static String _formatMacro(double value) {
+    if (value == value.roundToDouble()) {
+      return '${value.toInt()}g';
+    }
+    return '${value.toStringAsFixed(1)}g';
+  }
+
+  static String _formatCaloriesShort(double calories) {
+    if (calories >= 1000) {
+      final k = calories / 1000;
+      return k >= 10 ? '${k.round()}k' : '${k.toStringAsFixed(1)}k';
+    }
+    return calories.round().toString();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -38,11 +70,23 @@ class HomeScreen extends StatelessWidget {
                     const SizedBox(height: 12),
                     _buildWorkoutCard(),
                     const SizedBox(height: 20),
-                    _buildStatsRow(),
-                    const SizedBox(height: 24),
-                    _sectionTitle('Nutrition Today'),
-                    const SizedBox(height: 12),
-                    _buildNutritionCard(),
+                    ValueListenableBuilder<List<NutritionLog>>(
+                      valueListenable: NutritionLogService.instance.logs,
+                      builder: (context, _, __) {
+                        final totals =
+                            NutritionLogService.instance.totalsForDay(_today());
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _buildStatsRow(totals),
+                            const SizedBox(height: 24),
+                            _sectionTitle('Nutrition Today'),
+                            const SizedBox(height: 12),
+                            _buildNutritionCard(totals),
+                          ],
+                        );
+                      },
+                    ),
                     const SizedBox(height: 24),
                     _sectionTitle('Next Game'),
                     const SizedBox(height: 12),
@@ -76,27 +120,32 @@ class HomeScreen extends StatelessWidget {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        const Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Good Morning,',
-              style: TextStyle(
-                fontSize: 14,
-                color: AppColors.textSecondary,
-              ),
-            ),
-            SizedBox(height: 2),
-            Text(
-              'Alex Rivera',
-              style: TextStyle(
-                fontSize: 22,
-                fontWeight: FontWeight.w700,
-                color: AppColors.textPrimary,
-                letterSpacing: -0.3,
-              ),
-            ),
-          ],
+        ValueListenableBuilder(
+          valueListenable: UserProfileService.instance.profile,
+          builder: (context, _, __) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Good Morning,',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  UserProfileService.instance.displayName,
+                  style: const TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.textPrimary,
+                    letterSpacing: -0.3,
+                  ),
+                ),
+              ],
+            );
+          },
         ),
         ProfileAvatar(
           radius: 22,
@@ -107,109 +156,133 @@ class HomeScreen extends StatelessWidget {
   }
 
   Widget _buildWorkoutCard() {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(20),
-      child: SizedBox(
-        height: 200,
-        width: double.infinity,
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            Image.network(
-              _workoutImageUrl,
-              fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) => Container(color: AppColors.card),
-            ),
-            Container(
-              decoration: const BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.bottomCenter,
-                  end: Alignment.topCenter,
-                  colors: [
-                    Color(0xF20B0E11),
-                    Color(0x660B0E11),
-                  ],
-                  stops: [0.3, 1.0],
+    return ValueListenableBuilder(
+      valueListenable: TrainingSessionOverrideService.instance.changes,
+      builder: (context, _, __) {
+        return ValueListenableBuilder(
+          valueListenable: TrainingPreferencesService.instance.preferences,
+          builder: (context, _, __) {
+            final session = TrainingPlanService.instance.todaySession();
+        final exerciseLabel = session.isRestDay
+            ? '${session.routines.length} recovery'
+            : '${session.exerciseCount} exercises';
+
+        return ClipRRect(
+          borderRadius: BorderRadius.circular(20),
+          child: SizedBox(
+            height: 200,
+            width: double.infinity,
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                Image.network(
+                  _workoutImageUrl,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) =>
+                      Container(color: AppColors.card),
                 ),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 4,
-                    ),
-                    decoration: BoxDecoration(
-                      color: AppColors.accent.withValues(alpha: 0.3),
-                      border: Border.all(
-                        color: AppColors.accent.withValues(alpha: 0.5),
-                      ),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: const Text(
-                      'AI-optimized for your game',
-                      style: TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.accentLight,
-                      ),
+                Container(
+                  decoration: const BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.bottomCenter,
+                      end: Alignment.topCenter,
+                      colors: [
+                        Color(0xF20B0E11),
+                        Color(0x660B0E11),
+                      ],
+                      stops: [0.3, 1.0],
                     ),
                   ),
-                  const SizedBox(height: 8),
-                  const Text(
-                    'Agility & Speed Drills',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.textPrimary,
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  Row(
+                ),
+                Padding(
+                  padding: const EdgeInsets.all(20),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.end,
                     children: [
-                      _metaItem(Icons.schedule_rounded, '45 min'),
-                      const SizedBox(width: 14),
-                      _metaItem(Icons.local_fire_department_rounded, '350 cal'),
-                      const SizedBox(width: 14),
-                      _metaItem(Icons.fitness_center_rounded, '5 exercises'),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: AppColors.accent.withValues(alpha: 0.3),
+                          border: Border.all(
+                            color: AppColors.accent.withValues(alpha: 0.5),
+                          ),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Text(
+                          session.isRestDay
+                              ? 'Recovery day · ${session.sportSummary}'
+                              : 'AI-optimized for ${session.sportSummary}',
+                          style: const TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.accentLight,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        session.title,
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.textPrimary,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      Row(
+                        children: [
+                          _metaItem(
+                            Icons.schedule_rounded,
+                            '${session.durationMinutes} min',
+                          ),
+                          const SizedBox(width: 14),
+                          _metaItem(
+                            Icons.local_fire_department_rounded,
+                            '${session.estimatedCalories} cal',
+                          ),
+                          const SizedBox(width: 14),
+                          _metaItem(Icons.fitness_center_rounded, exerciseLabel),
+                        ],
+                      ),
+                      const SizedBox(height: 14),
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: FilledButton(
+                          onPressed: onStartTraining,
+                          style: FilledButton.styleFrom(
+                            backgroundColor: AppColors.accent,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 28,
+                              vertical: 10,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          child: Text(
+                            session.isRestDay ? 'View' : 'Start',
+                            style: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                      ),
                     ],
                   ),
-                  const SizedBox(height: 14),
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: FilledButton(
-                      onPressed: onStartTraining,
-                      style: FilledButton.styleFrom(
-                        backgroundColor: AppColors.accent,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 28,
-                          vertical: 10,
-                        ),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                      child: const Text(
-                        'Start',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
+                ),
+              ],
             ),
-          ],
-        ),
-      ),
+          ),
+        );
+          },
+        );
+      },
     );
   }
 
@@ -230,14 +303,19 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildStatsRow() {
+  Widget _buildStatsRow(NutritionDayTotals totals) {
     return Row(
       children: [
         Expanded(child: _statCard('12', 'Day Streak')),
         const SizedBox(width: 10),
         Expanded(child: _statCard('5', 'Sessions')),
         const SizedBox(width: 10),
-        Expanded(child: _statCard('2.4k', 'Calories')),
+        Expanded(
+          child: _statCard(
+            _formatCaloriesShort(totals.calories),
+            'Calories',
+          ),
+        ),
       ],
     );
   }
@@ -276,7 +354,16 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildNutritionCard() {
+  Widget _buildNutritionCard(NutritionDayTotals totals) {
+    final calorieProgress =
+        (totals.calories / NutritionLogService.calorieGoal).clamp(0.0, 1.0);
+    final proteinProgress =
+        (totals.proteinG / NutritionLogService.proteinGoalG).clamp(0.0, 1.0);
+    final carbsProgress =
+        (totals.carbsG / NutritionLogService.carbsGoalG).clamp(0.0, 1.0);
+    final fatProgress =
+        (totals.fatG / NutritionLogService.fatGoalG).clamp(0.0, 1.0);
+
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -286,20 +373,38 @@ class HomeScreen extends StatelessWidget {
       ),
       child: Row(
         children: [
-          const SizedBox(
+          SizedBox(
             width: 100,
             height: 100,
-            child: _CalorieRing(progress: 0.7),
+            child: _CalorieRing(
+              progress: calorieProgress,
+              caloriesLabel: _numberFormat.format(totals.calories.round()),
+            ),
           ),
           const SizedBox(width: 20),
           Expanded(
             child: Column(
               children: [
-                _macroRow('Protein', '120g / 180g', 120 / 180, AppColors.accent),
+                _macroRow(
+                  'Protein',
+                  '${_formatMacro(totals.proteinG)} / ${_formatMacro(NutritionLogService.proteinGoalG)}',
+                  proteinProgress,
+                  AppColors.accent,
+                ),
                 const SizedBox(height: 12),
-                _macroRow('Carbs', '185g / 250g', 185 / 250, AppColors.green),
+                _macroRow(
+                  'Carbs',
+                  '${_formatMacro(totals.carbsG)} / ${_formatMacro(NutritionLogService.carbsGoalG)}',
+                  carbsProgress,
+                  AppColors.green,
+                ),
                 const SizedBox(height: 12),
-                _macroRow('Fat', '52g / 70g', 52 / 70, AppColors.yellow),
+                _macroRow(
+                  'Fat',
+                  '${_formatMacro(totals.fatG)} / ${_formatMacro(NutritionLogService.fatGoalG)}',
+                  fatProgress,
+                  AppColors.yellow,
+                ),
               ],
             ),
           ),
@@ -352,6 +457,19 @@ class HomeScreen extends StatelessWidget {
   }
 
   Widget _buildNextGameCard() {
+    return ValueListenableBuilder<List<ScheduledGame>>(
+      valueListenable: GameScheduleService.instance.games,
+      builder: (context, _, __) {
+        final nextGame = GameScheduleService.instance.nextGame;
+        if (nextGame == null) {
+          return _buildEmptyNextGameCard();
+        }
+        return _buildNextGameCardContent(nextGame);
+      },
+    );
+  }
+
+  Widget _buildEmptyNextGameCard() {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(20),
@@ -366,9 +484,59 @@ class HomeScreen extends StatelessWidget {
       ),
       child: Column(
         children: [
+          Icon(
+            Icons.event_available_outlined,
+            size: 32,
+            color: AppColors.textSecondary.withValues(alpha: 0.9),
+          ),
+          const SizedBox(height: 12),
           const Text(
-            '2d 14h',
+            'No upcoming games',
             style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w700,
+              color: AppColors.textPrimary,
+            ),
+          ),
+          const SizedBox(height: 6),
+          const Text(
+            'Add a game in Schedule',
+            style: TextStyle(
+              fontSize: 12,
+              color: AppColors.textSecondary,
+            ),
+          ),
+          const SizedBox(height: 14),
+          TextButton(
+            onPressed: () => onNavTap?.call(1),
+            child: const Text(
+              'Go to Schedule',
+              style: TextStyle(color: AppColors.accent),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildNextGameCardContent(ScheduledGame game) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [AppColors.nextGameStart, AppColors.nextGameEnd],
+        ),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AppColors.accent.withValues(alpha: 0.25)),
+      ),
+      child: Column(
+        children: [
+          Text(
+            GameFormat.countdownLabel(game.gameAt),
+            style: const TextStyle(
               fontSize: 40,
               fontWeight: FontWeight.w800,
               color: AppColors.textPrimary,
@@ -379,10 +547,11 @@ class HomeScreen extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              _teamBadge('Z', 'Zephyrs', const [
-                AppColors.accent,
-                Color(0xFF8183F4),
-              ]),
+              _teamBadge(
+                game.userTeamLetter,
+                game.userTeamName,
+                game.userTeamGradient,
+              ),
               const SizedBox(width: 16),
               const Text(
                 'VS',
@@ -393,16 +562,17 @@ class HomeScreen extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 16),
-              _teamBadge('P', 'Panthers', const [
-                Color(0xFFF97316),
-                Color(0xFFFB923C),
-              ]),
+              _teamBadge(
+                game.opponentLetter,
+                game.opponentName,
+                game.opponentGradient,
+              ),
             ],
           ),
           const SizedBox(height: 14),
-          const Text(
-            'Tue 24, 7:00 PM',
-            style: TextStyle(
+          Text(
+            GameFormat.shortDateTime(game.gameAt),
+            style: const TextStyle(
               fontSize: 13,
               color: AppColors.textSecondary,
             ),
@@ -418,10 +588,10 @@ class HomeScreen extends StatelessWidget {
                 color: AppColors.yellow.withValues(alpha: 0.3),
               ),
             ),
-            child: const Text(
-              'Pre-game agility focus today',
+            child: Text(
+              game.isHome ? 'Home game — prep starts today' : 'Away game — travel ready',
               textAlign: TextAlign.center,
-              style: TextStyle(
+              style: const TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w600,
                 color: AppColors.yellow,
@@ -472,9 +642,13 @@ class HomeScreen extends StatelessWidget {
 }
 
 class _CalorieRing extends StatelessWidget {
-  const _CalorieRing({required this.progress});
+  const _CalorieRing({
+    required this.progress,
+    required this.caloriesLabel,
+  });
 
   final double progress;
+  final String caloriesLabel;
 
   @override
   Widget build(BuildContext context) {
@@ -485,18 +659,18 @@ class _CalorieRing extends StatelessWidget {
           size: const Size(100, 100),
           painter: _RingPainter(progress: progress),
         ),
-        const Column(
+        Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(
-              '1,680',
-              style: TextStyle(
+              caloriesLabel,
+              style: const TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.w800,
                 color: AppColors.textPrimary,
               ),
             ),
-            Text(
+            const Text(
               'calories',
               style: TextStyle(
                 fontSize: 10,

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:peakform_ai/config/supabase_config.dart';
 import 'package:peakform_ai/services/profile_avatar_service.dart';
+import 'package:peakform_ai/services/user_profile_service.dart';
 import 'package:peakform_ai/theme/app_colors.dart';
 
 class ProfileAvatar extends StatelessWidget {
@@ -18,29 +20,45 @@ class ProfileAvatar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    Widget buildAvatar(String? localPath, String? remoteUrl) {
+      final avatar = _buildAvatar(localPath, remoteUrl);
+
+      if (onTap == null) {
+        return avatar;
+      }
+
+      return Material(
+        color: Colors.transparent,
+        shape: const CircleBorder(),
+        child: InkWell(
+          onTap: onTap,
+          customBorder: const CircleBorder(),
+          child: avatar,
+        ),
+      );
+    }
+
+    if (!SupabaseConfig.isConfigured) {
+      return ValueListenableBuilder<String?>(
+        valueListenable: ProfileAvatarService.instance.localPath,
+        builder: (context, localPath, _) => buildAvatar(localPath, null),
+      );
+    }
+
     return ValueListenableBuilder<String?>(
       valueListenable: ProfileAvatarService.instance.localPath,
       builder: (context, localPath, _) {
-        final avatar = _buildAvatar(localPath);
-
-        if (onTap == null) {
-          return avatar;
-        }
-
-        return Material(
-          color: Colors.transparent,
-          shape: const CircleBorder(),
-          child: InkWell(
-            onTap: onTap,
-            customBorder: const CircleBorder(),
-            child: avatar,
-          ),
+        return ValueListenableBuilder(
+          valueListenable: UserProfileService.instance.profile,
+          builder: (context, profile, _) {
+            return buildAvatar(localPath, profile?.avatarUrl);
+          },
         );
       },
     );
   }
 
-  Widget _buildAvatar(String? localPath) {
+  Widget _buildAvatar(String? localPath, String? remoteUrl) {
     final size = radius * 2;
     final avatar = Container(
       width: size,
@@ -52,7 +70,10 @@ class ProfileAvatar extends StatelessWidget {
       child: CircleAvatar(
         radius: radius - borderWidth,
         backgroundColor: AppColors.barTrack,
-        backgroundImage: ProfileAvatarService.instance.avatarImage(localPath),
+        backgroundImage: ProfileAvatarService.instance.avatarImage(
+          localPath: localPath,
+          remoteUrl: remoteUrl,
+        ),
         onBackgroundImageError: (_, __) {},
       ),
     );

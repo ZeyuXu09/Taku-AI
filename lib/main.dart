@@ -1,13 +1,31 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:image_picker/image_picker.dart';
-import 'package:peakform_ai/screens/app_shell.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:peakform_ai/config/supabase_config.dart';
+import 'package:peakform_ai/screens/auth_gate.dart';
 import 'package:peakform_ai/services/profile_avatar_service.dart';
+import 'package:peakform_ai/services/supabase_service.dart';
 import 'package:peakform_ai/theme/app_colors.dart';
 
-void main() async {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  try {
+    await dotenv.load(fileName: '.env', isOptional: true);
+  } catch (_) {}
+
+  if (!SupabaseConfig.isConfigured) {
+    try {
+      await dotenv.load(fileName: '.env.example', isOptional: true);
+    } catch (_) {}
+  }
+
   await ProfileAvatarService.instance.initialize();
+
+  if (SupabaseConfig.isConfigured) {
+    await SupabaseService.initialize();
+  }
+
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(
       statusBarColor: Colors.transparent,
@@ -36,7 +54,7 @@ class PeakFormApp extends StatelessWidget {
         ),
         useMaterial3: true,
       ),
-      home: const AppShell(),
+      home: const AuthGate(),
     );
   }
 }

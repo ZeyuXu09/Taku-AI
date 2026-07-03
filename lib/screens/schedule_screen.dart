@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:peakform_ai/models/scheduled_game.dart';
+import 'package:peakform_ai/services/game_schedule_service.dart';
 import 'package:peakform_ai/theme/app_colors.dart';
+import 'package:peakform_ai/utils/game_format.dart';
 import 'package:peakform_ai/widgets/peak_bottom_nav.dart';
 
 class ScheduleScreen extends StatefulWidget {
@@ -12,34 +15,28 @@ class ScheduleScreen extends StatefulWidget {
 }
 
 class _ScheduleScreenState extends State<ScheduleScreen> {
-  static const _gameDays = {20, 23, 25};
+  late DateTime _visibleMonth;
+  late int _selectedDay;
+  late DateTime _selectedDate;
 
-  DateTime _visibleMonth = DateTime(2025, 2);
-  int _selectedDay = 18;
+  @override
+  void initState() {
+    super.initState();
+    final now = DateTime.now();
+    _visibleMonth = DateTime(now.year, now.month);
+    _selectedDay = now.day;
+    _selectedDate = DateTime(now.year, now.month, now.day);
+    GameScheduleService.instance.loadGames();
+  }
 
-  static const _games = [
-    _Game(
-      letter: 'P',
-      opponent: 'vs Panthers',
-      meta: 'Feb 20 · 7:00 PM',
-      isHome: false,
-      gradient: [Color(0xFFF97316), Color(0xFFFB923C)],
-    ),
-    _Game(
-      letter: 'W',
-      opponent: 'vs Wolves',
-      meta: 'Feb 23 · 6:30 PM',
-      isHome: true,
-      gradient: [Color(0xFF6366F1), Color(0xFF818CF8)],
-    ),
-    _Game(
-      letter: 'H',
-      opponent: 'vs Hawks',
-      meta: 'Feb 25 · 5:15 PM',
-      isHome: false,
-      gradient: [Color(0xFFEF4444), Color(0xFFF87171)],
-    ),
-  ];
+  DateTime get _today {
+    final now = DateTime.now();
+    return DateTime(now.year, now.month, now.day);
+  }
+
+  bool _isSameDay(DateTime a, DateTime b) {
+    return a.year == b.year && a.month == b.month && a.day == b.day;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -50,24 +47,44 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
         child: Column(
           children: [
             Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _buildHeader(),
-                    const SizedBox(height: 20),
-                    _buildCalendarCard(),
-                    const SizedBox(height: 24),
-                    _sectionTitle('Upcoming Games'),
-                    const SizedBox(height: 12),
-                    ..._games.map(_buildGameItem),
-                    const SizedBox(height: 24),
-                    _sectionTitle("This Week's Plan"),
-                    const SizedBox(height: 12),
-                    _buildPlanRow(),
-                  ],
-                ),
+              child: ValueListenableBuilder<List<ScheduledGame>>(
+                valueListenable: GameScheduleService.instance.games,
+                builder: (context, _, __) {
+                  final gameDays =
+                      GameScheduleService.instance.gameDaysInMonth(_visibleMonth);
+                  final selectedDayGames =
+                      GameScheduleService.instance.gamesOnDay(_selectedDate);
+                  final listGames = _isSameDay(_selectedDate, _today)
+                      ? GameScheduleService.instance.upcomingGames()
+                      : selectedDayGames;
+
+                  return SingleChildScrollView(
+                    padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _buildHeader(),
+                        const SizedBox(height: 20),
+                        _buildCalendarCard(gameDays),
+                        const SizedBox(height: 24),
+                        _sectionTitle(
+                          _isSameDay(_selectedDate, _today)
+                              ? 'Upcoming Games'
+                              : 'Games on ${_monthName(_selectedDate.month)} ${_selectedDate.day}',
+                        ),
+                        const SizedBox(height: 12),
+                        if (listGames.isEmpty)
+                          _buildEmptyState()
+                        else
+                          ...listGames.map(_buildGameItem),
+                        const SizedBox(height: 24),
+                        _sectionTitle("This Week's Plan"),
+                        const SizedBox(height: 12),
+                        _buildPlanRow(),
+                      ],
+                    ),
+                  );
+                },
               ),
             ),
             PeakBottomNav(
@@ -93,18 +110,15 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
             letterSpacing: -0.3,
           ),
         ),
-        Row(
-          children: [
-            _IconBoxButton(icon: Icons.search_rounded, onTap: () {}),
-            const SizedBox(width: 8),
-            _IconBoxButton(icon: Icons.notifications_none_rounded, onTap: () {}),
-          ],
+        _IconBoxButton(
+          icon: Icons.add_rounded,
+          onTap: _showAddGameSheet,
         ),
       ],
     );
   }
 
-  Widget _buildCalendarCard() {
+  Widget _buildCalendarCard(Set<int> gameDays) {
     final monthLabel =
         '${_monthName(_visibleMonth.month)} ${_visibleMonth.year}';
     final daysInMonth =
@@ -183,18 +197,22 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
               }
 
               final day = index - leadingEmpty + 1;
-              final isSelected = _visibleMonth.year == 2025 &&
-                  _visibleMonth.month == 2 &&
-                  day == _selectedDay;
-              final isGameDay = _visibleMonth.year == 2025 &&
-                  _visibleMonth.month == 2 &&
-                  _gameDays.contains(day);
+              final date = DateTime(_visibleMonth.year, _visibleMonth.month, day);
+              final isToday = _isSameDay(date, _today);
+              final isSelected = _isSameDay(date, _selectedDate);
+              final isGameDay = gameDays.contains(day);
 
               return _DayCell(
                 day: day,
+                isToday: isToday,
                 isSelected: isSelected,
                 isGameDay: isGameDay,
-                onTap: () => setState(() => _selectedDay = day),
+                onTap: () {
+                  setState(() {
+                    _selectedDay = day;
+                    _selectedDate = date;
+                  });
+                },
               );
             },
           ),
@@ -203,16 +221,101 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
     );
   }
 
+  Widget _buildEmptyState() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: AppColors.card,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.cardBorder),
+      ),
+      child: Column(
+        children: [
+          Icon(
+            Icons.event_busy_rounded,
+            size: 36,
+            color: AppColors.textSecondary.withValues(alpha: 0.8),
+          ),
+          const SizedBox(height: 12),
+          const Text(
+            'No games scheduled',
+            style: TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w700,
+              color: AppColors.textPrimary,
+            ),
+          ),
+          const SizedBox(height: 6),
+          const Text(
+            'Tap + to add your first game',
+            style: TextStyle(
+              fontSize: 12,
+              color: AppColors.textSecondary,
+            ),
+          ),
+          const SizedBox(height: 16),
+          TextButton.icon(
+            onPressed: _showAddGameSheet,
+            icon: const Icon(Icons.add_rounded, color: AppColors.accent),
+            label: const Text(
+              'Add Game',
+              style: TextStyle(color: AppColors.accent),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _showAddGameSheet() => _showGameFormSheet();
+
+  Future<void> _showEditGameSheet(ScheduledGame game) =>
+      _showGameFormSheet(existing: game);
+
+  Future<void> _showGameFormSheet({ScheduledGame? existing}) async {
+    final saved = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppColors.card,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) => _GameFormSheet(
+        initialDate: existing?.gameAt ?? _selectedDate,
+        existing: existing,
+      ),
+    );
+
+    if (saved == true && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(existing == null ? 'Game added' : 'Game updated'),
+        ),
+      );
+    }
+  }
+
   void _previousMonth() {
     setState(() {
       _visibleMonth = DateTime(_visibleMonth.year, _visibleMonth.month - 1);
+      _syncSelectedDayForVisibleMonth();
     });
   }
 
   void _nextMonth() {
     setState(() {
       _visibleMonth = DateTime(_visibleMonth.year, _visibleMonth.month + 1);
+      _syncSelectedDayForVisibleMonth();
     });
+  }
+
+  void _syncSelectedDayForVisibleMonth() {
+    final daysInMonth =
+        DateTime(_visibleMonth.year, _visibleMonth.month + 1, 0).day;
+    final day = _selectedDay.clamp(1, daysInMonth);
+    _selectedDay = day;
+    _selectedDate = DateTime(_visibleMonth.year, _visibleMonth.month, day);
   }
 
   String _monthName(int month) {
@@ -244,84 +347,143 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
     );
   }
 
-  Widget _buildGameItem(_Game game) {
+  Widget _buildGameItem(ScheduledGame game) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
-      child: Container(
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: AppColors.card,
+      child: Material(
+        color: AppColors.card,
+        shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: AppColors.cardBorder),
+          side: const BorderSide(color: AppColors.cardBorder),
         ),
-        child: Row(
-          children: [
-            Container(
-              width: 44,
-              height: 44,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: game.gradient,
-                ),
-              ),
-              child: Text(
-                game.letter,
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w800,
-                  color: Colors.white,
-                ),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    game.opponent,
-                    style: const TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.textPrimary,
+        child: InkWell(
+          onTap: () => _showEditGameSheet(game),
+          borderRadius: BorderRadius.circular(16),
+          child: Padding(
+            padding: const EdgeInsets.all(14),
+            child: Row(
+              children: [
+                Container(
+                  width: 44,
+                  height: 44,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: game.opponentGradient,
                     ),
                   ),
-                  const SizedBox(height: 3),
-                  Text(
-                    game.meta,
+                  child: Text(
+                    game.opponentLetter,
                     style: const TextStyle(
-                      fontSize: 11,
-                      color: AppColors.textSecondary,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w800,
+                      color: Colors.white,
                     ),
                   ),
-                ],
-              ),
-            ),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-              decoration: BoxDecoration(
-                color: game.isHome
-                    ? AppColors.accent.withValues(alpha: 0.2)
-                    : AppColors.textSecondary.withValues(alpha: 0.15),
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Text(
-                game.isHome ? 'Home' : 'Away',
-                style: TextStyle(
-                  fontSize: 10,
-                  fontWeight: FontWeight.w600,
-                  color: game.isHome ? AppColors.accentLight : AppColors.textSecondary,
                 ),
-              ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'vs ${game.opponentName}',
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.textPrimary,
+                        ),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        GameFormat.metaLine(game.gameAt),
+                        style: const TextStyle(
+                          fontSize: 11,
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: game.isHome
+                        ? AppColors.accent.withValues(alpha: 0.2)
+                        : AppColors.textSecondary.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    game.isHome ? 'Home' : 'Away',
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w600,
+                      color: game.isHome
+                          ? AppColors.accentLight
+                          : AppColors.textSecondary,
+                    ),
+                  ),
+                ),
+                IconButton(
+                  onPressed: () => _showEditGameSheet(game),
+                  icon: const Icon(
+                    Icons.edit_outlined,
+                    size: 18,
+                    color: AppColors.navInactive,
+                  ),
+                ),
+                IconButton(
+                  onPressed: () => _confirmDeleteGame(game),
+                  icon: const Icon(
+                    Icons.delete_outline_rounded,
+                    size: 18,
+                    color: AppColors.navInactive,
+                  ),
+                ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );
+  }
+
+  Future<void> _confirmDeleteGame(ScheduledGame game) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: AppColors.card,
+        title: const Text(
+          'Delete game?',
+          style: TextStyle(color: AppColors.textPrimary),
+        ),
+        content: Text(
+          'Remove vs ${game.opponentName} on ${GameFormat.metaLine(game.gameAt)}?',
+          style: const TextStyle(color: AppColors.textSecondary),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text(
+              'Delete',
+              style: TextStyle(color: Color(0xFFEF4444)),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      await GameScheduleService.instance.deleteGame(game.id);
+    }
   }
 
   Widget _buildPlanRow() {
@@ -373,15 +535,276 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
   }
 }
 
+class _GameFormSheet extends StatefulWidget {
+  const _GameFormSheet({
+    required this.initialDate,
+    this.existing,
+  });
+
+  final DateTime initialDate;
+  final ScheduledGame? existing;
+
+  @override
+  State<_GameFormSheet> createState() => _GameFormSheetState();
+}
+
+class _GameFormSheetState extends State<_GameFormSheet> {
+  final _opponentController = TextEditingController();
+  late DateTime _gameDate;
+  late TimeOfDay _gameTime;
+  late bool _isHome;
+  bool _isSaving = false;
+  String? _errorMessage;
+
+  bool get _isEditing => widget.existing != null;
+
+  @override
+  void initState() {
+    super.initState();
+    final existing = widget.existing;
+    if (existing != null) {
+      _opponentController.text = existing.opponentName;
+      _gameDate = DateTime(
+        existing.gameAt.year,
+        existing.gameAt.month,
+        existing.gameAt.day,
+      );
+      _gameTime = TimeOfDay.fromDateTime(existing.gameAt);
+      _isHome = existing.isHome;
+    } else {
+      _gameDate = widget.initialDate;
+      _gameTime = const TimeOfDay(hour: 19, minute: 0);
+      _isHome = true;
+    }
+  }
+
+  @override
+  void dispose() {
+    _opponentController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _pickDate() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _gameDate,
+      firstDate: DateTime.now().subtract(const Duration(days: 365)),
+      lastDate: DateTime.now().add(const Duration(days: 365 * 2)),
+    );
+    if (picked != null) {
+      setState(() => _gameDate = picked);
+    }
+  }
+
+  Future<void> _pickTime() async {
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: _gameTime,
+    );
+    if (picked != null) {
+      setState(() => _gameTime = picked);
+    }
+  }
+
+  Future<void> _saveGame() async {
+    final opponent = _opponentController.text.trim();
+    if (opponent.isEmpty) {
+      setState(() => _errorMessage = 'Enter an opponent name');
+      return;
+    }
+
+    setState(() {
+      _isSaving = true;
+      _errorMessage = null;
+    });
+
+    final gameAt = DateTime(
+      _gameDate.year,
+      _gameDate.month,
+      _gameDate.day,
+      _gameTime.hour,
+      _gameTime.minute,
+    );
+
+    try {
+      if (_isEditing) {
+        await GameScheduleService.instance.updateGame(
+          id: widget.existing!.id,
+          opponentName: opponent,
+          gameAt: gameAt,
+          isHome: _isHome,
+        );
+      } else {
+        await GameScheduleService.instance.addGame(
+          opponentName: opponent,
+          gameAt: gameAt,
+          isHome: _isHome,
+        );
+      }
+      if (mounted) Navigator.of(context).pop(true);
+    } catch (error) {
+      if (mounted) {
+        setState(() {
+          _isSaving = false;
+          _errorMessage = GameScheduleService.friendlyError(error);
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
+
+    return Padding(
+      padding: EdgeInsets.fromLTRB(20, 12, 20, 24 + bottomInset),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Center(
+            child: Container(
+              width: 36,
+              height: 4,
+              decoration: BoxDecoration(
+                color: AppColors.navInactive,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            _isEditing ? 'Edit Game' : 'Add Game',
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w700,
+              color: AppColors.textPrimary,
+            ),
+          ),
+          const SizedBox(height: 20),
+          TextField(
+            controller: _opponentController,
+            style: const TextStyle(color: AppColors.textPrimary),
+            decoration: InputDecoration(
+              labelText: 'Opponent',
+              labelStyle: const TextStyle(color: AppColors.textSecondary),
+              filled: true,
+              fillColor: AppColors.barTrack,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+                borderSide: BorderSide.none,
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: _pickDate,
+                  icon: const Icon(Icons.calendar_today_rounded, size: 16),
+                  label: Text(
+                    '${_gameDate.month}/${_gameDate.day}/${_gameDate.year}',
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: _pickTime,
+                  icon: const Icon(Icons.schedule_rounded, size: 16),
+                  label: Text(_gameTime.format(context)),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: ChoiceChip(
+                  label: const Text('Home'),
+                  selected: _isHome,
+                  onSelected: (selected) {
+                    if (selected) setState(() => _isHome = true);
+                  },
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: ChoiceChip(
+                  label: const Text('Away'),
+                  selected: !_isHome,
+                  onSelected: (selected) {
+                    if (selected) setState(() => _isHome = false);
+                  },
+                ),
+              ),
+            ],
+          ),
+          if (_errorMessage != null) ...[
+            const SizedBox(height: 12),
+            Text(
+              _errorMessage!,
+              style: const TextStyle(color: Color(0xFFEF4444), fontSize: 12),
+            ),
+          ],
+          const SizedBox(height: 20),
+          DecoratedBox(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(14),
+              gradient: const LinearGradient(
+                colors: [AppColors.accent, Color(0xFF764BA2)],
+              ),
+            ),
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: _isSaving ? null : _saveGame,
+                borderRadius: BorderRadius.circular(14),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  child: Center(
+                    child: _isSaving
+                        ? const SizedBox(
+                            width: 22,
+                            height: 22,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                        : Text(
+                            _isEditing ? 'Update Game' : 'Save Game',
+                            style: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w700,
+                              color: Colors.white,
+                            ),
+                          ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _DayCell extends StatelessWidget {
   const _DayCell({
     required this.day,
+    required this.isToday,
     required this.isSelected,
     required this.isGameDay,
     required this.onTap,
   });
 
   final int day;
+  final bool isToday;
   final bool isSelected;
   final bool isGameDay;
   final VoidCallback onTap;
@@ -404,19 +827,28 @@ class _DayCell extends StatelessWidget {
                     color: AppColors.accent,
                     shape: BoxShape.circle,
                   ),
+                )
+              else if (isToday)
+                Container(
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(color: AppColors.green, width: 2),
+                  ),
                 ),
               Text(
                 '$day',
                 style: TextStyle(
                   fontSize: 12,
-                  fontWeight: isSelected || isGameDay
+                  fontWeight: isSelected || isToday || isGameDay
                       ? FontWeight.w700
                       : FontWeight.w500,
                   color: isSelected
                       ? AppColors.textPrimary
-                      : isGameDay
-                          ? AppColors.textTertiary
-                          : AppColors.textSecondary,
+                      : isToday
+                          ? AppColors.green
+                          : isGameDay
+                              ? AppColors.textTertiary
+                              : AppColors.textSecondary,
                 ),
               ),
               if (isGameDay)
@@ -521,22 +953,6 @@ class _PlanCard extends StatelessWidget {
       ),
     );
   }
-}
-
-class _Game {
-  const _Game({
-    required this.letter,
-    required this.opponent,
-    required this.meta,
-    required this.isHome,
-    required this.gradient,
-  });
-
-  final String letter;
-  final String opponent;
-  final String meta;
-  final bool isHome;
-  final List<Color> gradient;
 }
 
 class _IconBoxButton extends StatelessWidget {

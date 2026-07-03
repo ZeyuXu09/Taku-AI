@@ -1,6 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:peakform_ai/config/supabase_config.dart';
+import 'package:peakform_ai/services/auth_service.dart';
+import 'package:peakform_ai/services/supabase_service.dart';
+import 'package:peakform_ai/services/user_profile_service.dart';
 import 'package:peakform_ai/theme/app_colors.dart';
 import 'package:peakform_ai/widgets/peak_bottom_nav.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key, this.onBack, this.onNavTap});
@@ -13,13 +18,61 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
-  String _email = 'alex.rivera@email.com';
-  String _units = 'Imperial (lbs, ft)';
+  static const _fallbackEmail = 'Add your email';
+  static const _fallbackUnits = 'Imperial (lbs, ft)';
+
+  String _email = _fallbackEmail;
+  String _units = _fallbackUnits;
 
   bool _pushNotifications = true;
   bool _workoutReminders = true;
   bool _gameDayAlerts = false;
   bool _darkMode = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _syncFromProfile();
+    UserProfileService.instance.profile.addListener(_syncFromProfile);
+    if (SupabaseConfig.isConfigured && SupabaseService.isSignedIn) {
+      UserProfileService.instance.loadCurrentProfile();
+    }
+  }
+
+  @override
+  void dispose() {
+    UserProfileService.instance.profile.removeListener(_syncFromProfile);
+    super.dispose();
+  }
+
+  void _syncFromProfile() {
+    if (!SupabaseConfig.isConfigured || !SupabaseService.isSignedIn) return;
+
+    final email = UserProfileService.instance.displayEmail;
+    final units = UserProfileService.instance.displayUnits;
+
+    if (email.isNotEmpty && _email != email) {
+      setState(() => _email = email);
+    }
+    if (units.isNotEmpty && _units != units) {
+      setState(() => _units = units);
+    }
+  }
+
+  String get _displayEmail {
+    if (SupabaseConfig.isConfigured && SupabaseService.isSignedIn) {
+      final email = UserProfileService.instance.displayEmail;
+      if (email.isNotEmpty) return email;
+    }
+    return _email;
+  }
+
+  String get _displayUnits {
+    if (SupabaseConfig.isConfigured && SupabaseService.isSignedIn) {
+      return UserProfileService.instance.displayUnits;
+    }
+    return _units;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -44,7 +97,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         iconColor: AppColors.accent,
                         iconBackground: AppColors.accent.withValues(alpha: 0.15),
                         label: 'Email',
-                        value: _email,
+                        value: _displayEmail,
                         onTap: _showEmailDialog,
                       ),
                       _SettingsRow(
@@ -59,7 +112,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         iconColor: AppColors.accent,
                         iconBackground: AppColors.accent.withValues(alpha: 0.15),
                         label: 'Units',
-                        value: _units,
+                        value: _displayUnits,
                         onTap: _showUnitsDialog,
                         showDivider: false,
                       ),
@@ -141,7 +194,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ]),
                     const SizedBox(height: 8),
                     OutlinedButton(
-                      onPressed: () {},
+                      onPressed: SupabaseConfig.isConfigured
+                          ? () async {
+                              await AuthService.signOut();
+                              UserProfileService.instance.clear();
+                            }
+                          : null,
                       style: OutlinedButton.styleFrom(
                         minimumSize: const Size(double.infinity, 48),
                         foregroundColor: const Color(0xFFEF4444),
@@ -242,22 +300,47 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> _showEmailDialog() async {
     final result = await showDialog<String>(
       context: context,
-      builder: (context) => _EmailDialog(initialEmail: _email),
+      builder: (context) => _EmailDialog(initialEmail: _displayEmail),
     );
-    if (result != null && mounted) {
-      setState(() => _email = result);
+    if (result == null || !mounted) return;
+
+    if (result == _displayEmail) return;
+
+    if (SupabaseConfig.isConfigured && SupabaseService.isSignedIn) {
+      try {
+        await UserProfileService.instance.updateEmail(result);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Email updated')),
+          );
+        }
+      } catch (_) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Could not update email')),
+          );
+        }
+        return;
+      }
     }
+
+    setState(() => _email = result);
   }
 
   Future<void> _showPasswordDialog() async {
-    await showDialog<void>(
+    final saved = await showDialog<bool>(
       context: context,
       builder: (context) => const _PasswordDialog(),
     );
+    if (saved == true && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Password updated')),
+      );
+    }
   }
 
   Future<void> _showUnitsDialog() async {
-    var selected = _units;
+    var selected = _displayUnits;
     final saved = await showDialog<bool>(
       context: context,
       builder: (context) => StatefulBuilder(
@@ -289,9 +372,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
         },
       ),
     );
-    if (saved == true && mounted) {
-      setState(() => _units = selected);
+    if (saved != true || !mounted) return;
+
+    if (SupabaseConfig.isConfigured && SupabaseService.isSignedIn) {
+      await UserProfileService.instance.updateUnits(selected);
     }
+
+    setState(() => _units = selected);
   }
 
   Widget _unitOption({
@@ -646,6 +733,7 @@ class _EmailDialog extends StatefulWidget {
 
 class _EmailDialogState extends State<_EmailDialog> {
   late final TextEditingController _controller;
+  String? _errorMessage;
 
   @override
   void initState() {
@@ -657,6 +745,23 @@ class _EmailDialogState extends State<_EmailDialog> {
   void dispose() {
     _controller.dispose();
     super.dispose();
+  }
+
+  bool _isValidEmail(String value) {
+    return RegExp(r'^[^@]+@[^@]+\.[^@]+$').hasMatch(value);
+  }
+
+  void _saveEmail() {
+    final email = _controller.text.trim();
+    if (email.isEmpty) {
+      setState(() => _errorMessage = 'Enter an email address');
+      return;
+    }
+    if (!_isValidEmail(email)) {
+      setState(() => _errorMessage = 'Enter a valid email address');
+      return;
+    }
+    _SettingsDialog.dismiss(context, email);
   }
 
   @override
@@ -683,9 +788,19 @@ class _EmailDialogState extends State<_EmailDialog> {
             style: const TextStyle(color: AppColors.textPrimary),
             decoration: _dialogInputDecoration(),
           ),
+          if (_errorMessage != null) ...[
+            const SizedBox(height: 8),
+            Text(
+              _errorMessage!,
+              style: const TextStyle(
+                color: Color(0xFFEF4444),
+                fontSize: 12,
+              ),
+            ),
+          ],
         ],
       ),
-      onSave: () => _SettingsDialog.dismiss(context, _controller.text.trim()),
+      onSave: _saveEmail,
     );
   }
 }
@@ -702,6 +817,9 @@ class _PasswordDialogState extends State<_PasswordDialog> {
   late final TextEditingController _newController;
   late final TextEditingController _confirmController;
 
+  bool _isSaving = false;
+  String? _errorMessage;
+
   @override
   void initState() {
     super.initState();
@@ -716,6 +834,59 @@ class _PasswordDialogState extends State<_PasswordDialog> {
     _newController.dispose();
     _confirmController.dispose();
     super.dispose();
+  }
+
+  Future<void> _savePassword() async {
+    final current = _currentController.text;
+    final newPassword = _newController.text;
+    final confirm = _confirmController.text;
+
+    if (current.isEmpty) {
+      setState(() => _errorMessage = 'Enter your current password');
+      return;
+    }
+    if (newPassword.length < 6) {
+      setState(() => _errorMessage = 'New password must be at least 6 characters');
+      return;
+    }
+    if (newPassword != confirm) {
+      setState(() => _errorMessage = 'New passwords do not match');
+      return;
+    }
+
+    if (!SupabaseConfig.isConfigured || !SupabaseService.isSignedIn) {
+      setState(() => _errorMessage = 'Sign in to change your password');
+      return;
+    }
+
+    setState(() {
+      _isSaving = true;
+      _errorMessage = null;
+    });
+
+    try {
+      await AuthService.updatePassword(
+        currentPassword: current,
+        newPassword: newPassword,
+      );
+      if (mounted) {
+        _SettingsDialog.dismiss(context, true);
+      }
+    } on AuthException catch (error) {
+      if (mounted) {
+        setState(() {
+          _isSaving = false;
+          _errorMessage = error.message;
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _isSaving = false;
+          _errorMessage = 'Could not update password';
+        });
+      }
+    }
   }
 
   @override
@@ -742,9 +913,19 @@ class _PasswordDialogState extends State<_PasswordDialog> {
             _confirmController,
             'Confirm new password',
           ),
+          if (_errorMessage != null) ...[
+            const SizedBox(height: 12),
+            Text(
+              _errorMessage!,
+              style: const TextStyle(
+                color: Color(0xFFEF4444),
+                fontSize: 12,
+              ),
+            ),
+          ],
         ],
       ),
-      onSave: () => _SettingsDialog.dismiss(context),
+      onSave: _isSaving ? () {} : _savePassword,
     );
   }
 
