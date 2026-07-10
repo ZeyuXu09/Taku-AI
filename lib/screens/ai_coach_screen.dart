@@ -6,6 +6,7 @@ import 'package:google_mlkit_pose_detection/google_mlkit_pose_detection.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:peakform_ai/theme/app_colors.dart';
 import 'package:peakform_ai/utils/pose_geometry.dart';
+import 'package:peakform_ai/widgets/live_pose_camera.dart';
 import 'package:peakform_ai/widgets/peak_bottom_nav.dart';
 import 'package:peakform_ai/widgets/pose_overlay_painter.dart';
 import 'package:peakform_ai/widgets/progress_ring.dart';
@@ -27,6 +28,8 @@ class AiCoachScreen extends StatefulWidget {
   State<AiCoachScreen> createState() => _AiCoachScreenState();
 }
 
+enum _CoachInputMode { idle, photo, live }
+
 class _AiCoachScreenState extends State<AiCoachScreen> {
   late final ImagePicker _picker;
   late final PoseDetector _poseDetector;
@@ -37,6 +40,9 @@ class _AiCoachScreenState extends State<AiCoachScreen> {
   double _imageHeight = 0;
   bool _processing = false;
   String? _errorMessage;
+  _CoachInputMode _inputMode = _CoachInputMode.idle;
+
+  bool get _isLiveMode => _inputMode == _CoachInputMode.live;
 
   @override
   void initState() {
@@ -61,12 +67,41 @@ class _AiCoachScreenState extends State<AiCoachScreen> {
     if (pickedFile == null) return;
 
     setState(() {
+      _inputMode = _CoachInputMode.photo;
       _image = File(pickedFile.path);
       _pose = null;
       _errorMessage = null;
     });
 
     await _processImage();
+  }
+
+  void _startLiveMode() {
+    setState(() {
+      _inputMode = _CoachInputMode.live;
+      _image = null;
+      _pose = null;
+      _errorMessage = null;
+      _processing = false;
+    });
+  }
+
+  void _stopLiveMode() {
+    setState(() {
+      _inputMode = _CoachInputMode.idle;
+      _pose = null;
+      _errorMessage = null;
+    });
+  }
+
+  void _onLivePose(Pose? pose) {
+    if (!mounted || !_isLiveMode) return;
+    setState(() {
+      _pose = pose;
+      _errorMessage = pose == null
+          ? 'No pose detected. Stand fully in frame with good lighting.'
+          : null;
+    });
   }
 
   Future<void> _processImage() async {
@@ -262,49 +297,54 @@ class _AiCoachScreenState extends State<AiCoachScreen> {
                   ),
                   const SizedBox(width: 5),
                   Text(
-                    _pose == null ? 'READY' : 'LIVE',
+                    _isLiveMode
+                        ? (_pose == null ? 'SCAN' : 'LIVE')
+                        : (_pose == null ? 'READY' : 'LIVE'),
                     style: TextStyle(
                       fontSize: 10,
                       fontWeight: FontWeight.w700,
-                      color: _pose == null ? AppColors.textSecondary : AppColors.green,
+                      color: _isLiveMode || _pose != null
+                          ? AppColors.green
+                          : AppColors.textSecondary,
                       letterSpacing: 0.8,
                     ),
                   ),
                 ],
               ),
               const SizedBox(width: 8),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFEF4444).withValues(alpha: 0.2),
-                  border: Border.all(
-                    color: const Color(0xFFEF4444).withValues(alpha: 0.4),
+              if (_isLiveMode)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFEF4444).withValues(alpha: 0.2),
+                    border: Border.all(
+                      color: const Color(0xFFEF4444).withValues(alpha: 0.4),
+                    ),
+                    borderRadius: BorderRadius.circular(6),
                   ),
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 6,
-                      height: 6,
-                      decoration: const BoxDecoration(
-                        color: Color(0xFFEF4444),
-                        shape: BoxShape.circle,
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 6,
+                        height: 6,
+                        decoration: const BoxDecoration(
+                          color: Color(0xFFEF4444),
+                          shape: BoxShape.circle,
+                        ),
                       ),
-                    ),
-                    const SizedBox(width: 4),
-                    const Text(
-                      'REC',
-                      style: TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w700,
-                        color: Color(0xFFEF4444),
-                        letterSpacing: 0.8,
+                      const SizedBox(width: 4),
+                      const Text(
+                        'REC',
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFFEF4444),
+                          letterSpacing: 0.8,
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
             ],
           ),
         ],
@@ -322,7 +362,12 @@ class _AiCoachScreenState extends State<AiCoachScreen> {
           child: Stack(
             fit: StackFit.expand,
             children: [
-              if (_image != null)
+              if (_isLiveMode)
+                LivePoseCamera(
+                  onPose: _onLivePose,
+                  highlightTypes: _highlightTypes,
+                )
+              else if (_image != null)
                 Image.file(
                   _image!,
                   fit: BoxFit.contain,
@@ -349,7 +394,7 @@ class _AiCoachScreenState extends State<AiCoachScreen> {
                   ),
                 ),
               ),
-              if (_pose != null)
+              if (!_isLiveMode && _pose != null)
                 CustomPaint(
                   painter: PoseOverlayPainter(
                     pose: _pose!,
@@ -358,7 +403,7 @@ class _AiCoachScreenState extends State<AiCoachScreen> {
                     highlightTypes: _highlightTypes,
                   ),
                 )
-              else if (_image == null)
+              else if (!_isLiveMode && _inputMode == _CoachInputMode.idle)
                 const CustomPaint(painter: _DemoPoseSkeletonPainter()),
               if (_processing)
                 Container(
@@ -414,7 +459,10 @@ class _AiCoachScreenState extends State<AiCoachScreen> {
                           style: TextStyle(fontWeight: FontWeight.w800),
                         ),
                         TextSpan(
-                          text: _errorMessage ?? coachFeedbackForPose(_pose),
+                          text: _errorMessage ??
+                              (_isLiveMode && _pose == null
+                                  ? 'Point the camera at yourself to analyze form in real time.'
+                                  : coachFeedbackForPose(_pose)),
                         ),
                       ],
                     ),
@@ -439,11 +487,17 @@ class _AiCoachScreenState extends State<AiCoachScreen> {
                   ],
                 ),
               ),
-              if (_image == null && !_processing)
+              if (!_isLiveMode && _inputMode == _CoachInputMode.idle && !_processing)
                 Center(
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
+                      _PickerButton(
+                        icon: Icons.videocam_rounded,
+                        label: 'Live',
+                        onTap: _startLiveMode,
+                      ),
+                      const SizedBox(height: 10),
                       _PickerButton(
                         icon: Icons.photo_library_rounded,
                         label: 'Gallery',
@@ -458,7 +512,20 @@ class _AiCoachScreenState extends State<AiCoachScreen> {
                     ],
                   ),
                 ),
-              if (_image != null && !_processing)
+              if (_isLiveMode)
+                Positioned(
+                  top: 12,
+                  left: 0,
+                  right: 0,
+                  child: Center(
+                    child: _PickerChip(
+                      icon: Icons.close_rounded,
+                      label: 'Exit Live',
+                      onTap: _stopLiveMode,
+                    ),
+                  ),
+                ),
+              if (!_isLiveMode && _image != null && !_processing)
                 Positioned(
                   top: 12,
                   left: 0,
@@ -467,6 +534,11 @@ class _AiCoachScreenState extends State<AiCoachScreen> {
                     child: Wrap(
                       spacing: 8,
                       children: [
+                        _PickerChip(
+                          icon: Icons.videocam_rounded,
+                          label: 'Live',
+                          onTap: _startLiveMode,
+                        ),
                         _PickerChip(
                           icon: Icons.photo_library_rounded,
                           label: 'Gallery',
