@@ -153,15 +153,23 @@ void main() {
     );
     await tester.pump();
 
+    await tester.tap(find.text('Start Workout').first);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Active Workout'), findsOneWidget);
+    expect(find.text('Start Workout'), findsOneWidget);
+    expect(find.text('Finish Workout'), findsNothing);
+
     await tester.tap(find.text('Start Workout'));
     await tester.pump();
     await tester.pump(const Duration(seconds: 1));
 
-    expect(find.text('Active Workout'), findsOneWidget);
     expect(find.text('Finish Workout'), findsOneWidget);
-    expect(find.text('WORKOUT TIME'), findsOneWidget);
     expect(find.text('EXERCISE TIME'), findsOneWidget);
-    expect(find.text(session.exercises.first.name), findsOneWidget);
+    expect(find.text('REST TIMER'), findsOneWidget);
+    expect(find.text('Total exercise'), findsOneWidget);
+    expect(find.text('Start rest'), findsOneWidget);
+    expect(find.text(session.exercises.first.name), findsWidgets);
   });
 
   testWidgets('Training tab opens change focus sheet', (tester) async {

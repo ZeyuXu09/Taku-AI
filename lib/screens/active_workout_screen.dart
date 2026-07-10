@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:peakform_ai/models/training_exercise.dart';
 import 'package:peakform_ai/models/training_session.dart';
 import 'package:peakform_ai/screens/exercise_detail_screen.dart';
@@ -43,25 +44,26 @@ class ActiveWorkoutScreen extends StatefulWidget {
 }
 
 class _ActiveWorkoutScreenState extends State<ActiveWorkoutScreen> {
+  static const _defaultRestDuration = Duration(seconds: 60);
+
   late final List<ScheduledExercise> _items;
-  late final DateTime _workoutStartedAt;
-  late DateTime _exerciseStartedAt;
 
   Timer? _timer;
-  Duration _workoutElapsed = Duration.zero;
-  Duration _exerciseElapsed = Duration.zero;
   int _currentIndex = 0;
+
+  bool _isStarted = false;
   bool _isPaused = false;
-  Duration _pausedAccumulated = Duration.zero;
-  DateTime? _pauseStartedAt;
+  bool _isResting = false;
+  bool _restComplete = false;
+
+  Duration _totalExerciseElapsed = Duration.zero;
+  Duration _restDuration = _defaultRestDuration;
+  Duration _restRemaining = _defaultRestDuration;
 
   @override
   void initState() {
     super.initState();
     _items = _workoutItems(widget.session);
-    final now = DateTime.now();
-    _workoutStartedAt = now;
-    _exerciseStartedAt = now;
     _startTimer();
   }
 
@@ -73,42 +75,91 @@ class _ActiveWorkoutScreenState extends State<ActiveWorkoutScreen> {
 
   ScheduledExercise get _currentExercise => _items[_currentIndex];
 
+  bool get _isExerciseTimerActive =>
+      _isStarted && !_isPaused && !_isResting;
+
+  bool get _isRestTimerActive => _isResting && !_isPaused && !_restComplete;
+
   void _startTimer() {
     _timer?.cancel();
     _timer = Timer.periodic(const Duration(seconds: 1), (_) => _tick());
   }
 
   void _tick() {
-    if (_isPaused) return;
+    if (!_isStarted) return;
+
     setState(() {
-      _workoutElapsed = DateTime.now().difference(_workoutStartedAt) -
-          _pausedAccumulated;
-      _exerciseElapsed = DateTime.now().difference(_exerciseStartedAt);
+      if (_isExerciseTimerActive) {
+        _totalExerciseElapsed += const Duration(seconds: 1);
+      }
+
+      if (_isRestTimerActive) {
+        if (_restRemaining > Duration.zero) {
+          _restRemaining -= const Duration(seconds: 1);
+        }
+        if (_restRemaining <= Duration.zero) {
+          _completeRest();
+        }
+      }
+    });
+  }
+
+  void _startWorkout() {
+    setState(() {
+      _isStarted = true;
+      _isPaused = false;
+      _isResting = false;
+      _restComplete = false;
+    });
+  }
+
+  void _startRest() {
+    if (!_isStarted || _isPaused) return;
+    setState(() {
+      _isResting = true;
+      _restComplete = false;
+      _restRemaining = _restDuration;
+    });
+  }
+
+  void _completeRest() {
+    _isResting = false;
+    _restComplete = true;
+    _restRemaining = Duration.zero;
+    HapticFeedback.mediumImpact();
+  }
+
+  void _dismissRestRecovery() {
+    setState(() {
+      _restComplete = false;
+      _restRemaining = _restDuration;
     });
   }
 
   void _togglePause() {
+    if (!_isStarted) return;
+
     setState(() {
       if (_isPaused) {
-        if (_pauseStartedAt != null) {
-          _pausedAccumulated += DateTime.now().difference(_pauseStartedAt!);
-        }
-        _pauseStartedAt = null;
         _isPaused = false;
-        _exerciseStartedAt = DateTime.now().subtract(_exerciseElapsed);
       } else {
-        _pauseStartedAt = DateTime.now();
         _isPaused = true;
+        _resetRestTimer();
       }
     });
+  }
+
+  void _resetRestTimer() {
+    _isResting = false;
+    _restComplete = false;
+    _restRemaining = _restDuration;
   }
 
   void _goToExercise(int index) {
     if (index < 0 || index >= _items.length) return;
     setState(() {
       _currentIndex = index;
-      _exerciseStartedAt = DateTime.now();
-      _exerciseElapsed = Duration.zero;
+      _resetRestTimer();
     });
   }
 
@@ -164,7 +215,10 @@ class _ActiveWorkoutScreenState extends State<ActiveWorkoutScreen> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _summaryRow('Total time', formatWorkoutDuration(_workoutElapsed)),
+            _summaryRow(
+              'Exercise time',
+              formatWorkoutDuration(_totalExerciseElapsed),
+            ),
             const SizedBox(height: 8),
             _summaryRow('Exercises', '${_items.length}'),
             const SizedBox(height: 8),
@@ -230,23 +284,94 @@ class _ActiveWorkoutScreenState extends State<ActiveWorkoutScreen> {
                   padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
                   child: Column(
                     children: [
-                      _buildWorkoutTimer(),
-                      const SizedBox(height: 20),
-                      _buildProgressBar(progress),
-                      const SizedBox(height: 24),
-                      _buildExerciseCard(),
-                      const SizedBox(height: 24),
-                      _buildExerciseTimer(),
-                      const SizedBox(height: 24),
-                      _buildExerciseNav(),
+                      if (!_isStarted) ...[
+                        _buildStartPrompt(),
+                      ] else ...[
+                        _buildTimerSection(),
+                        const SizedBox(height: 20),
+                        _buildProgressBar(progress),
+                        const SizedBox(height: 24),
+                        _buildExerciseCard(),
+                        const SizedBox(height: 24),
+                        _buildExerciseNav(),
+                      ],
                     ],
                   ),
                 ),
               ),
-              _buildFinishBar(context),
+              if (_isStarted) _buildFinishBar(context),
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildStartPrompt() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 32),
+      child: Column(
+        children: [
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: AppColors.card,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: AppColors.cardBorder),
+            ),
+            child: Column(
+              children: [
+                const Icon(
+                  Icons.timer_outlined,
+                  size: 48,
+                  color: AppColors.accent,
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  _items.first.name,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  '${_items.length} exercises · Tap start when you are ready',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    color: AppColors.textSecondary,
+                    height: 1.4,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 28),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton.icon(
+              onPressed: _startWorkout,
+              icon: const Icon(Icons.play_arrow_rounded, size: 24),
+              label: const Text('Start Workout'),
+              style: FilledButton.styleFrom(
+                backgroundColor: AppColors.green,
+                foregroundColor: AppColors.background,
+                padding: const EdgeInsets.symmetric(vertical: 18),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                textStyle: const TextStyle(
+                  fontSize: 17,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -290,37 +415,116 @@ class _ActiveWorkoutScreenState extends State<ActiveWorkoutScreen> {
               ],
             ),
           ),
-          Material(
-            color: AppColors.card,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(10),
-              side: const BorderSide(color: AppColors.cardBorder),
-            ),
-            child: InkWell(
-              onTap: _togglePause,
-              borderRadius: BorderRadius.circular(10),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      _isPaused ? Icons.play_arrow_rounded : Icons.pause_rounded,
-                      size: 18,
-                      color: AppColors.accent,
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      _isPaused ? 'Resume' : 'Pause',
-                      style: const TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
+          if (_isStarted)
+            Material(
+              color: AppColors.card,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+                side: const BorderSide(color: AppColors.cardBorder),
+              ),
+              child: InkWell(
+                onTap: _togglePause,
+                borderRadius: BorderRadius.circular(10),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        _isPaused ? Icons.play_arrow_rounded : Icons.pause_rounded,
+                        size: 18,
                         color: AppColors.accent,
                       ),
-                    ),
-                  ],
+                      const SizedBox(width: 4),
+                      Text(
+                        _isPaused ? 'Resume' : 'Pause',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.accent,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTimerSection() {
+    final restProgress = _restDuration.inSeconds == 0
+        ? 0.0
+        : _restRemaining.inSeconds / _restDuration.inSeconds;
+
+    return Column(
+      children: [
+        Row(
+          children: [
+            Expanded(child: _buildExerciseTimeCard()),
+            const SizedBox(width: 12),
+            Expanded(child: _buildRestTimerCard(restProgress)),
+          ],
+        ),
+        if (_restComplete) ...[
+          const SizedBox(height: 12),
+          _buildRestRecoveryBanner(),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildExerciseTimeCard() {
+    final statusLabel = !_isStarted
+        ? 'NOT STARTED'
+        : _isPaused
+            ? 'PAUSED'
+            : _isResting
+                ? 'RESTING'
+                : 'EXERCISE TIME';
+
+    final statusColor = _isPaused
+        ? AppColors.yellow
+        : _isResting
+            ? AppColors.accentLight
+            : AppColors.textSecondary;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 12),
+      decoration: BoxDecoration(
+        color: AppColors.card,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.cardBorder),
+      ),
+      child: Column(
+        children: [
+          Text(
+            formatWorkoutDuration(_totalExerciseElapsed),
+            style: const TextStyle(
+              fontSize: 28,
+              fontWeight: FontWeight.w800,
+              color: AppColors.textPrimary,
+              fontFeatures: [FontFeature.tabularFigures()],
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            statusLabel,
+            style: TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.w700,
+              color: statusColor,
+              letterSpacing: 1.1,
+            ),
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            'Total exercise',
+            style: TextStyle(
+              fontSize: 11,
+              color: AppColors.textSecondary,
             ),
           ),
         ],
@@ -328,30 +532,132 @@ class _ActiveWorkoutScreenState extends State<ActiveWorkoutScreen> {
     );
   }
 
-  Widget _buildWorkoutTimer() {
-    return Column(
-      children: [
-        Text(
-          formatWorkoutDuration(_workoutElapsed),
-          style: const TextStyle(
-            fontSize: 40,
-            fontWeight: FontWeight.w800,
-            color: AppColors.textPrimary,
-            letterSpacing: -1,
-            fontFeatures: [FontFeature.tabularFigures()],
-          ),
+  Widget _buildRestTimerCard(double restProgress) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
+      decoration: BoxDecoration(
+        color: AppColors.card,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: _isResting
+              ? AppColors.accent.withValues(alpha: 0.45)
+              : AppColors.cardBorder,
         ),
-        const SizedBox(height: 4),
-        Text(
-          _isPaused ? 'PAUSED' : 'WORKOUT TIME',
-          style: TextStyle(
-            fontSize: 11,
-            fontWeight: FontWeight.w700,
-            color: _isPaused ? AppColors.yellow : AppColors.textSecondary,
-            letterSpacing: 1.2,
+      ),
+      child: Column(
+        children: [
+          ProgressRing(
+            progress: restProgress.clamp(0.0, 1.0),
+            size: 72,
+            strokeWidth: 7,
+            color: _restComplete ? AppColors.green : AppColors.accent,
+            center: Text(
+              formatWorkoutDuration(_restRemaining),
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w800,
+                color: AppColors.textPrimary,
+                fontFeatures: [FontFeature.tabularFigures()],
+              ),
+            ),
           ),
-        ),
-      ],
+          const SizedBox(height: 8),
+          Text(
+            _restComplete
+                ? 'RECOVERED'
+                : _isResting
+                    ? 'RESTING'
+                    : 'REST TIMER',
+            style: TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.w700,
+              color: _restComplete ? AppColors.green : AppColors.textSecondary,
+              letterSpacing: 1.1,
+            ),
+          ),
+          const SizedBox(height: 8),
+          if (_restComplete)
+            TextButton(
+              onPressed: _dismissRestRecovery,
+              style: TextButton.styleFrom(
+                foregroundColor: AppColors.green,
+                padding: EdgeInsets.zero,
+                minimumSize: Size.zero,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+              child: const Text(
+                'Continue',
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+              ),
+            )
+          else if (_isResting)
+            TextButton(
+              onPressed: _isPaused
+                  ? null
+                  : () {
+                      setState(_resetRestTimer);
+                    },
+              style: TextButton.styleFrom(
+                foregroundColor: AppColors.textSecondary,
+                padding: EdgeInsets.zero,
+                minimumSize: Size.zero,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+              child: const Text(
+                'Cancel rest',
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+              ),
+            )
+          else
+            FilledButton(
+              onPressed: _isPaused ? null : _startRest,
+              style: FilledButton.styleFrom(
+                backgroundColor: AppColors.accent,
+                foregroundColor: Colors.white,
+                disabledBackgroundColor: AppColors.barTrack,
+                disabledForegroundColor: AppColors.textSecondary,
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                minimumSize: Size.zero,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+              child: const Text(
+                'Start rest',
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRestRecoveryBanner() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: AppColors.green.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.green.withValues(alpha: 0.35)),
+      ),
+      child: const Row(
+        children: [
+          Icon(Icons.check_circle_outline_rounded, color: AppColors.green, size: 20),
+          SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              'Rest complete — ready for your next set',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: AppColors.green,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -461,38 +767,6 @@ class _ActiveWorkoutScreenState extends State<ActiveWorkoutScreen> {
         size: 48,
         color: AppColors.textSecondary,
       ),
-    );
-  }
-
-  Widget _buildExerciseTimer() {
-    return Column(
-      children: [
-        ProgressRing(
-          progress: (_exerciseElapsed.inSeconds % 60) / 60,
-          size: 100,
-          strokeWidth: 8,
-          color: AppColors.green,
-          center: Text(
-            formatWorkoutDuration(_exerciseElapsed),
-            style: const TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.w800,
-              color: AppColors.textPrimary,
-              fontFeatures: [FontFeature.tabularFigures()],
-            ),
-          ),
-        ),
-        const SizedBox(height: 8),
-        const Text(
-          'EXERCISE TIME',
-          style: TextStyle(
-            fontSize: 11,
-            fontWeight: FontWeight.w700,
-            color: AppColors.textSecondary,
-            letterSpacing: 1.2,
-          ),
-        ),
-      ],
     );
   }
 
