@@ -28,7 +28,12 @@ class BicepCurlAnalyzer extends ExerciseAnalyzer {
     final upperArmAngle = PoseMath.angle(pose, hip, shoulder, elbow);
 
     if (elbowAngle == null) {
-      return const AnalysisResult.waiting();
+      return AnalysisResult(
+        reps: _reps.reps,
+        phase: 'Get into frame',
+        poseVisible: false,
+        formGood: false,
+      );
     }
 
     final contraction = PoseMath.mapRange(elbowAngle, 30, 160, 100, 0);

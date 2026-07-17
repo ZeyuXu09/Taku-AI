@@ -6,8 +6,8 @@ import 'package:flutter/services.dart';
 import 'package:google_mlkit_pose_detection/google_mlkit_pose_detection.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:peakform_ai/coach/analysis_result.dart';
-import 'package:peakform_ai/coach/analyzer_factory.dart';
 import 'package:peakform_ai/coach/coach_exercise.dart';
+import 'package:peakform_ai/coach/coach_session.dart';
 import 'package:peakform_ai/coach/exercise_analyzer.dart';
 import 'package:peakform_ai/theme/app_colors.dart';
 import 'package:peakform_ai/utils/pose_geometry.dart';
@@ -38,6 +38,8 @@ enum _CoachInputMode { idle, photo, live }
 class _AiCoachScreenState extends State<AiCoachScreen> {
   late final ImagePicker _picker;
   late final PoseDetector _poseDetector;
+  final _cameraKey = GlobalKey<LivePoseCameraState>();
+  final _session = CoachSession.instance;
 
   File? _image;
   Pose? _pose;
@@ -47,11 +49,15 @@ class _AiCoachScreenState extends State<AiCoachScreen> {
   String? _errorMessage;
   _CoachInputMode _inputMode = _CoachInputMode.idle;
 
-  CoachExercise _exercise = CoachExercise.pushup;
-  ExerciseAnalyzer? _analyzer;
-  AnalysisResult _liveResult = const AnalysisResult.waiting();
+  late CoachExercise _exercise;
+  late ExerciseAnalyzer _analyzer;
+  late AnalysisResult _liveResult;
 
   bool get _isLiveMode => _inputMode == _CoachInputMode.live;
+
+  int get _displayedReps => _liveResult.reps;
+
+  Duration get _displayedHold => _liveResult.holdTime;
 
   @override
   void initState() {
@@ -63,10 +69,21 @@ class _AiCoachScreenState extends State<AiCoachScreen> {
         model: PoseDetectionModel.base,
       ),
     );
+
+    _exercise = _session.exercise;
+    _analyzer = _session.analyzerFor(_exercise);
+    _liveResult = _session.resultFor(_exercise);
+
+    if (_session.preferLiveOnReturn) {
+      _inputMode = _CoachInputMode.live;
+    }
   }
 
   @override
   void dispose() {
+    _session.selectExercise(_exercise);
+    _session.setResult(_exercise, _liveResult);
+    _session.markLeftScreen(wasLive: _isLiveMode);
     _poseDetector.close();
     super.dispose();
   }
@@ -79,8 +96,6 @@ class _AiCoachScreenState extends State<AiCoachScreen> {
       _inputMode = _CoachInputMode.photo;
       _image = File(pickedFile.path);
       _pose = null;
-      _analyzer = null;
-      _liveResult = const AnalysisResult.waiting();
       _errorMessage = null;
     });
 
@@ -94,52 +109,72 @@ class _AiCoachScreenState extends State<AiCoachScreen> {
       _pose = null;
       _errorMessage = null;
       _processing = false;
-      _analyzer = createAnalyzer(_exercise);
-      _liveResult = const AnalysisResult.waiting();
+      _analyzer = _session.analyzerFor(_exercise);
+      _liveResult = _session.resultFor(_exercise);
     });
   }
 
   void _stopLiveMode() {
+    _session.setResult(_exercise, _liveResult);
     setState(() {
       _inputMode = _CoachInputMode.idle;
       _pose = null;
-      _analyzer = null;
-      _liveResult = const AnalysisResult.waiting();
       _errorMessage = null;
     });
   }
 
   void _selectExercise(CoachExercise exercise) {
     if (_exercise == exercise) return;
+    _session.setResult(_exercise, _liveResult);
+    _session.selectExercise(exercise);
     setState(() {
       _exercise = exercise;
-      if (_isLiveMode) {
-        _analyzer = createAnalyzer(exercise);
-        _liveResult = const AnalysisResult.waiting();
-      }
+      _analyzer = _session.analyzerFor(exercise);
+      _liveResult = _session.resultFor(exercise);
     });
   }
 
   void _resetLiveSession() {
-    _analyzer?.reset();
-    setState(() => _liveResult = const AnalysisResult.waiting());
+    _session.resetCurrent();
+    setState(() {
+      _analyzer = _session.analyzerFor(_exercise);
+      _liveResult = const AnalysisResult.waiting();
+    });
+  }
+
+  void _flipCamera() {
+    _cameraKey.currentState?.switchCamera();
+  }
+
+  void _zoomIn() {
+    _cameraKey.currentState?.zoomIn();
+  }
+
+  void _zoomOut() {
+    _cameraKey.currentState?.zoomOut();
   }
 
   void _onLivePose(Pose? pose) {
     if (!mounted || !_isLiveMode) return;
 
-    final analyzer = _analyzer;
-    if (pose == null || analyzer == null) {
+    if (pose == null) {
       setState(() {
-        _pose = pose;
-        _liveResult = const AnalysisResult.waiting();
+        _pose = null;
+        _liveResult = AnalysisResult(
+          reps: _displayedReps,
+          phase: 'Get into frame',
+          poseVisible: false,
+          formGood: false,
+          holdTime: _displayedHold,
+        );
         _errorMessage =
             'No pose detected. Stand fully in frame with good lighting.';
       });
+      _session.setResult(_exercise, _liveResult);
       return;
     }
 
-    final result = analyzer.update(pose, DateTime.now());
+    final result = _analyzer.update(pose, DateTime.now());
 
     if (result.reps > _liveResult.reps) {
       HapticFeedback.mediumImpact();
@@ -155,6 +190,7 @@ class _AiCoachScreenState extends State<AiCoachScreen> {
           ? null
           : 'Get into frame — keep your full body visible.';
     });
+    _session.setResult(_exercise, _liveResult);
   }
 
   Future<void> _processImage() async {
@@ -211,8 +247,6 @@ class _AiCoachScreenState extends State<AiCoachScreen> {
       }
     }
   }
-
-  double get _confidence => _pose == null ? 0 : averageLandmarkConfidence(_pose!);
 
   Set<PoseLandmarkType> get _highlightTypes {
     final leftKnee = _kneeAngles
@@ -272,6 +306,10 @@ class _AiCoachScreenState extends State<AiCoachScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (_isLiveMode) {
+      return _buildLiveFullscreen();
+    }
+
     return Scaffold(
       backgroundColor: AppColors.background,
       body: SafeArea(
@@ -301,6 +339,483 @@ class _AiCoachScreenState extends State<AiCoachScreen> {
         ),
       ),
     );
+  }
+
+  /// Live mode: camera fills the phone screen and follows orientation.
+  Widget _buildLiveFullscreen() {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: OrientationBuilder(
+        builder: (context, orientation) {
+          final isLandscape = orientation == Orientation.landscape;
+
+          final camera = LivePoseCamera(
+            key: _cameraKey,
+            onPose: _onLivePose,
+            formGood: _liveResult.formGood,
+            angles: _liveResult.angles,
+            highlightTypes: _highlightTypes,
+            showFlipButton: false,
+          );
+
+          if (isLandscape) {
+            return Row(
+              children: [
+                Expanded(
+                  flex: 7,
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      camera,
+                      SafeArea(
+                        child: Align(
+                          alignment: Alignment.topCenter,
+                          child: Padding(
+                            padding: const EdgeInsets.only(top: 8),
+                            child: Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              alignment: WrapAlignment.center,
+                              children: _liveControlChips(),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                SizedBox(
+                  width: 300,
+                  child: SafeArea(
+                    child: ColoredBox(
+                      color: AppColors.background.withValues(alpha: 0.92),
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Row(
+                              children: [
+                                _IconBoxButton(
+                                  icon: Icons.arrow_back_ios_new_rounded,
+                                  size: 32,
+                                  iconSize: 16,
+                                  onTap: _stopLiveMode,
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    _exercise.title.toUpperCase(),
+                                    style: const TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w700,
+                                      color: AppColors.textPrimary,
+                                      letterSpacing: 1.2,
+                                    ),
+                                  ),
+                                ),
+                                _feedBadge(
+                                  _exercise.isStatic
+                                      ? _formatHold(_displayedHold)
+                                      : '$_displayedReps REPS',
+                                  color: AppColors.green,
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 12),
+                            _buildExercisePicker(),
+                            const Spacer(),
+                            _liveCoachBanner(),
+                            const SizedBox(height: 10),
+                            _liveStatsRow(),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            );
+          }
+
+          return Stack(
+            fit: StackFit.expand,
+            children: [
+              camera,
+              SafeArea(
+                child: Column(
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+                      child: Row(
+                        children: [
+                          _IconBoxButton(
+                            icon: Icons.arrow_back_ios_new_rounded,
+                            size: 32,
+                            iconSize: 16,
+                            onTap: _stopLiveMode,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              _exercise.title.toUpperCase(),
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.textPrimary,
+                                letterSpacing: 1.2,
+                              ),
+                            ),
+                          ),
+                          _feedBadge(
+                            _exercise.isStatic
+                                ? _formatHold(_displayedHold)
+                                : '$_displayedReps REPS',
+                            color: AppColors.green,
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    _buildExercisePicker(),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      alignment: WrapAlignment.center,
+                      children: _liveControlChips(),
+                    ),
+                    const Spacer(),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                      child: Column(
+                        children: [
+                          _liveCoachBanner(),
+                          const SizedBox(height: 10),
+                          _liveStatsRow(),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  List<Widget> _liveControlChips() {
+    return [
+      _PickerChip(
+        icon: Icons.zoom_out_rounded,
+        label: 'Zoom −',
+        onTap: _zoomOut,
+      ),
+      _PickerChip(
+        icon: Icons.zoom_in_rounded,
+        label: 'Zoom +',
+        onTap: _zoomIn,
+      ),
+      _PickerChip(
+        icon: Icons.cameraswitch_rounded,
+        label: 'Flip',
+        onTap: _flipCamera,
+      ),
+      _PickerChip(
+        icon: Icons.refresh_rounded,
+        label: 'Reset',
+        onTap: _resetLiveSession,
+      ),
+      _PickerChip(
+        icon: Icons.close_rounded,
+        label: 'Exit Live',
+        onTap: _stopLiveMode,
+      ),
+    ];
+  }
+
+  Widget _liveCoachBanner() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: AppColors.yellow.withValues(alpha: 0.18),
+        border: Border.all(color: AppColors.yellow.withValues(alpha: 0.45)),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: RichText(
+        text: TextSpan(
+          style: const TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: AppColors.yellow,
+            height: 1.4,
+          ),
+          children: [
+            const TextSpan(
+              text: 'AI COACH: ',
+              style: TextStyle(fontWeight: FontWeight.w800),
+            ),
+            TextSpan(text: _coachCueText),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _liveStatsRow() {
+    return Row(
+      children: [
+        Expanded(
+          child: _feedStat(
+            _exercise.isStatic ? 'Hold' : 'Reps',
+            _exercise.isStatic
+                ? _formatHold(_displayedHold)
+                : '$_displayedReps',
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: _feedStat('Phase', _liveResult.phase),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: _feedStat(
+            'Form',
+            !_liveResult.poseVisible
+                ? '--'
+                : (_liveResult.formGood ? 'GOOD' : 'FIX'),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCameraFeed() {
+    final size = MediaQuery.sizeOf(context);
+    final isLandscape = size.width > size.height;
+    // Fill most of the available phone screen for the idle/photo preview.
+    final feedHeight = isLandscape ? size.height * 0.72 : size.height * 0.55;
+
+    return Padding(
+      padding: EdgeInsets.symmetric(horizontal: isLandscape ? 20 : 16),
+      child: SizedBox(
+        width: double.infinity,
+        height: feedHeight,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(20),
+          child: Stack(
+            fit: StackFit.expand,
+            children: _cameraFeedStackChildren(includeLive: false),
+          ),
+        ),
+      ),
+    );
+  }
+
+  List<Widget> _cameraFeedStackChildren({bool includeLive = true}) {
+    return [
+              if (includeLive && _isLiveMode)
+                LivePoseCamera(
+                  key: _cameraKey,
+                  onPose: _onLivePose,
+                  formGood: _liveResult.formGood,
+                  angles: _liveResult.angles,
+                  highlightTypes: _highlightTypes,
+                  showFlipButton: false,
+                )
+              else if (_image != null)
+                Image.file(
+                  _image!,
+                  fit: BoxFit.contain,
+                  width: double.infinity,
+                  height: double.infinity,
+                )
+              else
+                Image.network(
+                  AiCoachScreen._athleteUrl,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, _, _) =>
+                      Container(color: AppColors.card),
+                ),
+              IgnorePointer(
+                child: Container(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        Colors.transparent,
+                        AppColors.background.withValues(alpha: 0.85),
+                      ],
+                      stops: const [0.5, 1.0],
+                    ),
+                  ),
+                ),
+              ),
+              if (!_isLiveMode && _pose != null)
+                CustomPaint(
+                  painter: PoseOverlayPainter(
+                    pose: _pose!,
+                    imageWidth: _imageWidth,
+                    imageHeight: _imageHeight,
+                    highlightTypes: _highlightTypes,
+                  ),
+                )
+              else if (!_isLiveMode && _inputMode == _CoachInputMode.idle)
+                const CustomPaint(painter: _DemoPoseSkeletonPainter()),
+              if (_processing)
+                Container(
+                  color: AppColors.background.withValues(alpha: 0.55),
+                  child: const Center(
+                    child: CircularProgressIndicator(color: AppColors.accent),
+                  ),
+                ),
+              IgnorePointer(
+                ignoring: _isLiveMode,
+                child: Stack(
+                  children: [
+                    Positioned(
+                      top: 12,
+                      left: 12,
+                      child: _feedBadge(
+                        _isLiveMode
+                            ? _liveResult.phase.toUpperCase()
+                            : '${_pose?.landmarks.length ?? 0} KEYPOINTS',
+                      ),
+                    ),
+                    Positioned(
+                      top: 12,
+                      right: 12,
+                      child: _feedBadge(
+                        _exercise.isStatic
+                            ? _formatHold(_displayedHold)
+                            : '$_displayedReps REPS',
+                        color: AppColors.green,
+                      ),
+                    ),
+                    Positioned(
+                      left: 12,
+                      right: 12,
+                      bottom: 72,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 10,
+                        ),
+                        decoration: BoxDecoration(
+                          color: AppColors.yellow.withValues(alpha: 0.15),
+                          border: Border.all(
+                            color: AppColors.yellow.withValues(alpha: 0.45),
+                          ),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: RichText(
+                          text: TextSpan(
+                            style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.yellow,
+                              height: 1.4,
+                            ),
+                            children: [
+                              const TextSpan(
+                                text: 'AI COACH: ',
+                                style: TextStyle(fontWeight: FontWeight.w800),
+                              ),
+                              TextSpan(text: _coachCueText),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                    Positioned(
+                      left: 12,
+                      right: 12,
+                      bottom: 12,
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          _feedStat(
+                            _exercise.isStatic ? 'Hold' : 'Reps',
+                            _exercise.isStatic
+                                ? _formatHold(_displayedHold)
+                                : '$_displayedReps',
+                          ),
+                          _feedStat(
+                            'Form',
+                            _isLiveMode
+                                ? (!_liveResult.poseVisible
+                                    ? '--'
+                                    : (_liveResult.formGood ? 'GOOD' : 'FIX'))
+                                : (_displayedReps > 0 ||
+                                        _displayedHold > Duration.zero
+                                    ? 'SAVED'
+                                    : '--'),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (!_isLiveMode && _inputMode == _CoachInputMode.idle && !_processing)
+                Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      _PickerButton(
+                        icon: Icons.videocam_rounded,
+                        label: 'Live',
+                        onTap: _startLiveMode,
+                      ),
+                      const SizedBox(height: 10),
+                      _PickerButton(
+                        icon: Icons.photo_library_rounded,
+                        label: 'Gallery',
+                        onTap: () => _getImage(ImageSource.gallery),
+                      ),
+                      const SizedBox(height: 10),
+                      _PickerButton(
+                        icon: Icons.photo_camera_rounded,
+                        label: 'Camera',
+                        onTap: () => _getImage(ImageSource.camera),
+                      ),
+                    ],
+                  ),
+                ),
+              if (!_isLiveMode && _image != null && !_processing)
+                Positioned(
+                  top: 12,
+                  left: 0,
+                  right: 0,
+                  child: Center(
+                    child: Wrap(
+                      spacing: 8,
+                      children: [
+                        _PickerChip(
+                          icon: Icons.videocam_rounded,
+                          label: 'Live',
+                          onTap: _startLiveMode,
+                        ),
+                        _PickerChip(
+                          icon: Icons.photo_library_rounded,
+                          label: 'Gallery',
+                          onTap: () => _getImage(ImageSource.gallery),
+                        ),
+                        _PickerChip(
+                          icon: Icons.photo_camera_rounded,
+                          label: 'Camera',
+                          onTap: () => _getImage(ImageSource.camera),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+    ];
   }
 
   Widget _buildFeaturedBadge() {
@@ -351,74 +866,34 @@ class _AiCoachScreenState extends State<AiCoachScreen> {
           ),
           Row(
             children: [
-              Row(
-                children: [
-                  Container(
-                    width: 6,
-                    height: 6,
-                    decoration: BoxDecoration(
-                      color: _pose == null ? AppColors.textSecondary : AppColors.green,
-                      shape: BoxShape.circle,
-                      boxShadow: _pose == null
-                          ? null
-                          : [
-                              BoxShadow(
-                                color: AppColors.green.withValues(alpha: 0.8),
-                                blurRadius: 8,
-                              ),
-                            ],
-                    ),
-                  ),
-                  const SizedBox(width: 5),
-                  Text(
-                    _isLiveMode
-                        ? (_pose == null ? 'SCAN' : 'LIVE')
-                        : (_pose == null ? 'READY' : 'LIVE'),
-                    style: TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.w700,
-                      color: _isLiveMode || _pose != null
-                          ? AppColors.green
-                          : AppColors.textSecondary,
-                      letterSpacing: 0.8,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(width: 8),
-              if (_isLiveMode)
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFEF4444).withValues(alpha: 0.2),
-                    border: Border.all(
-                      color: const Color(0xFFEF4444).withValues(alpha: 0.4),
-                    ),
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 6,
-                        height: 6,
-                        decoration: const BoxDecoration(
-                          color: Color(0xFFEF4444),
-                          shape: BoxShape.circle,
-                        ),
-                      ),
-                      const SizedBox(width: 4),
-                      const Text(
-                        'REC',
-                        style: TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w700,
-                          color: Color(0xFFEF4444),
-                          letterSpacing: 0.8,
-                        ),
-                      ),
-                    ],
-                  ),
+              Container(
+                width: 6,
+                height: 6,
+                decoration: BoxDecoration(
+                  color: _pose == null ? AppColors.textSecondary : AppColors.green,
+                  shape: BoxShape.circle,
+                  boxShadow: _pose == null
+                      ? null
+                      : [
+                          BoxShadow(
+                            color: AppColors.green.withValues(alpha: 0.8),
+                            blurRadius: 8,
+                          ),
+                        ],
                 ),
+              ),
+              const SizedBox(width: 5),
+              Text(
+                _pose == null ? 'READY' : 'LIVE',
+                style: TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
+                  color: _pose == null
+                      ? AppColors.textSecondary
+                      : AppColors.green,
+                  letterSpacing: 0.8,
+                ),
+              ),
             ],
           ),
         ],
@@ -449,9 +924,7 @@ class _AiCoachScreenState extends State<AiCoachScreen> {
             selectedColor: AppColors.green,
             backgroundColor: AppColors.card,
             side: BorderSide(
-              color: selected
-                  ? AppColors.green
-                  : AppColors.cardBorder,
+              color: selected ? AppColors.green : AppColors.cardBorder,
             ),
             labelStyle: TextStyle(
               fontSize: 12,
@@ -461,248 +934,6 @@ class _AiCoachScreenState extends State<AiCoachScreen> {
             showCheckmark: false,
           );
         },
-      ),
-    );
-  }
-
-  Widget _buildCameraFeed() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: AspectRatio(
-        aspectRatio: 3 / 4,
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(20),
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              if (_isLiveMode)
-                LivePoseCamera(
-                  onPose: _onLivePose,
-                  formGood: _liveResult.formGood,
-                  angles: _liveResult.angles,
-                  highlightTypes: _highlightTypes,
-                )
-              else if (_image != null)
-                Image.file(
-                  _image!,
-                  fit: BoxFit.contain,
-                  width: double.infinity,
-                  height: double.infinity,
-                )
-              else
-                Image.network(
-                  AiCoachScreen._athleteUrl,
-                  fit: BoxFit.cover,
-                  errorBuilder: (_, _, _) =>
-                      Container(color: AppColors.card),
-                ),
-              Container(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [
-                      Colors.transparent,
-                      AppColors.background.withValues(alpha: 0.85),
-                    ],
-                    stops: const [0.5, 1.0],
-                  ),
-                ),
-              ),
-              if (!_isLiveMode && _pose != null)
-                CustomPaint(
-                  painter: PoseOverlayPainter(
-                    pose: _pose!,
-                    imageWidth: _imageWidth,
-                    imageHeight: _imageHeight,
-                    highlightTypes: _highlightTypes,
-                  ),
-                )
-              else if (!_isLiveMode && _inputMode == _CoachInputMode.idle)
-                const CustomPaint(painter: _DemoPoseSkeletonPainter()),
-              if (_processing)
-                Container(
-                  color: AppColors.background.withValues(alpha: 0.55),
-                  child: const Center(
-                    child: CircularProgressIndicator(color: AppColors.accent),
-                  ),
-                ),
-              Positioned(
-                top: 12,
-                left: 12,
-                child: _feedBadge(
-                  _isLiveMode
-                      ? _liveResult.phase.toUpperCase()
-                      : '${_pose?.landmarks.length ?? 0} KEYPOINTS',
-                ),
-              ),
-              Positioned(
-                top: 12,
-                right: 12,
-                child: _feedBadge(
-                  _isLiveMode
-                      ? (_exercise.isStatic
-                          ? _formatHold(_liveResult.holdTime)
-                          : '${_liveResult.reps} REPS')
-                      : (_pose == null
-                          ? 'AWAITING INPUT'
-                          : '${(_confidence * 100).round()}% CONFIDENCE'),
-                  color: _isLiveMode
-                      ? (_liveResult.formGood
-                          ? AppColors.green
-                          : AppColors.yellow)
-                      : (_pose == null ? null : AppColors.green),
-                ),
-              ),
-              Positioned(
-                left: 12,
-                right: 12,
-                bottom: 72,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 14,
-                    vertical: 10,
-                  ),
-                  decoration: BoxDecoration(
-                    color: AppColors.yellow.withValues(alpha: 0.15),
-                    border: Border.all(
-                      color: AppColors.yellow.withValues(alpha: 0.45),
-                    ),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: RichText(
-                    text: TextSpan(
-                      style: const TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.yellow,
-                        height: 1.4,
-                      ),
-                      children: [
-                        const TextSpan(
-                          text: 'AI COACH: ',
-                          style: TextStyle(fontWeight: FontWeight.w800),
-                        ),
-                        TextSpan(text: _coachCueText),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-              Positioned(
-                left: 12,
-                right: 12,
-                bottom: 12,
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    if (_isLiveMode) ...[
-                      _feedStat(
-                        _exercise.isStatic ? 'Hold' : 'Reps',
-                        _exercise.isStatic
-                            ? _formatHold(_liveResult.holdTime)
-                            : '${_liveResult.reps}',
-                      ),
-                      _feedStat(
-                        'Form',
-                        !_liveResult.poseVisible
-                            ? '--'
-                            : (_liveResult.formGood ? 'GOOD' : 'FIX'),
-                      ),
-                    ] else ...[
-                      _feedStat(
-                        'Stability',
-                        _pose == null
-                            ? '--'
-                            : '${(_confidence * 100).round()}%',
-                      ),
-                      _feedStat(
-                        'People',
-                        _pose == null ? '0' : '1',
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-              if (!_isLiveMode && _inputMode == _CoachInputMode.idle && !_processing)
-                Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      _PickerButton(
-                        icon: Icons.videocam_rounded,
-                        label: 'Live',
-                        onTap: _startLiveMode,
-                      ),
-                      const SizedBox(height: 10),
-                      _PickerButton(
-                        icon: Icons.photo_library_rounded,
-                        label: 'Gallery',
-                        onTap: () => _getImage(ImageSource.gallery),
-                      ),
-                      const SizedBox(height: 10),
-                      _PickerButton(
-                        icon: Icons.photo_camera_rounded,
-                        label: 'Camera',
-                        onTap: () => _getImage(ImageSource.camera),
-                      ),
-                    ],
-                  ),
-                ),
-              if (_isLiveMode)
-                Positioned(
-                  top: 48,
-                  left: 0,
-                  right: 0,
-                  child: Center(
-                    child: Wrap(
-                      spacing: 8,
-                      children: [
-                        _PickerChip(
-                          icon: Icons.refresh_rounded,
-                          label: 'Reset',
-                          onTap: _resetLiveSession,
-                        ),
-                        _PickerChip(
-                          icon: Icons.close_rounded,
-                          label: 'Exit Live',
-                          onTap: _stopLiveMode,
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              if (!_isLiveMode && _image != null && !_processing)
-                Positioned(
-                  top: 12,
-                  left: 0,
-                  right: 0,
-                  child: Center(
-                    child: Wrap(
-                      spacing: 8,
-                      children: [
-                        _PickerChip(
-                          icon: Icons.videocam_rounded,
-                          label: 'Live',
-                          onTap: _startLiveMode,
-                        ),
-                        _PickerChip(
-                          icon: Icons.photo_library_rounded,
-                          label: 'Gallery',
-                          onTap: () => _getImage(ImageSource.gallery),
-                        ),
-                        _PickerChip(
-                          icon: Icons.photo_camera_rounded,
-                          label: 'Camera',
-                          onTap: () => _getImage(ImageSource.camera),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-            ],
-          ),
-        ),
       ),
     );
   }
@@ -762,104 +993,47 @@ class _AiCoachScreenState extends State<AiCoachScreen> {
   }
 
   Widget _buildMetrics() {
-    if (_isLiveMode) {
-      return _buildLiveMetrics();
-    }
-
-    final confidence = _confidence;
-    final rating = _pose == null ? '--' : formRatingLabel(confidence);
-    final progress = _pose == null ? 0.0 : confidence;
-    final ringColor =
-        confidence >= 0.75 ? AppColors.green : AppColors.yellow;
-
-    final leftKnee = _jointAngle('Left Knee');
-    final rightKnee = _jointAngle('Right Knee');
-
-    return Padding(
-      padding: const EdgeInsets.all(16),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          ProgressRing(
-            progress: progress,
-            size: 100,
-            strokeWidth: 8,
-            color: ringColor,
-            center: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  _pose == null ? '--' : '${(confidence * 100).round()}',
-                  style: const TextStyle(
-                    fontSize: 26,
-                    fontWeight: FontWeight.w800,
-                    color: AppColors.textPrimary,
-                    height: 1,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  rating,
-                  style: TextStyle(
-                    fontSize: 9,
-                    fontWeight: FontWeight.w700,
-                    color: ringColor,
-                    letterSpacing: 0.8,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'JOINT ANGLES',
-                  style: TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.textSecondary,
-                    letterSpacing: 1.2,
-                  ),
-                ),
-                const SizedBox(height: 10),
-                _jointCard(
-                  'Left Knee',
-                  leftKnee == null ? '--' : '${leftKnee.degrees.round()}°',
-                  isWarning: leftKnee?.isWarning ?? false,
-                ),
-                const SizedBox(height: 8),
-                _jointCard(
-                  'Right Knee',
-                  rightKnee == null ? '--' : '${rightKnee.degrees.round()}°',
-                  isWarning: rightKnee?.isWarning ?? false,
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
+    // Always show the persisted live session score for the selected exercise.
+    return _buildLiveMetrics();
   }
 
   Widget _buildLiveMetrics() {
     final result = _liveResult;
-    final ringColor = !result.poseVisible
+    final ringColor = _isLiveMode && !result.poseVisible
         ? AppColors.textSecondary
-        : (result.formGood ? AppColors.green : AppColors.yellow);
-    final progress = !result.poseVisible
-        ? 0.0
-        : (result.formGood ? 1.0 : 0.45);
+        : (result.formGood || result.reps > 0 || result.holdTime > Duration.zero
+            ? AppColors.green
+            : AppColors.yellow);
+    final progress = !_isLiveMode
+        ? (result.reps > 0 || result.holdTime > Duration.zero ? 1.0 : 0.0)
+        : (!result.poseVisible
+            ? (result.reps > 0 || result.holdTime > Duration.zero ? 0.7 : 0.0)
+            : (result.formGood ? 1.0 : 0.45));
     final centerValue = _exercise.isStatic
         ? _formatHold(result.holdTime)
         : '${result.reps}';
     final centerLabel = _exercise.isStatic ? 'HOLD' : 'REPS';
 
-    final angleCards = result.angles.isEmpty
+    final angleCards = (!_isLiveMode || result.angles.isEmpty)
         ? [
-            _jointCard('Waiting', '--', isWarning: false),
+            if (!_isLiveMode)
+              _jointCard(
+                'Session',
+                _exercise.isStatic
+                    ? _formatHold(result.holdTime)
+                    : '${result.reps} reps',
+                isWarning: false,
+              )
+            else
+              _jointCard('Waiting', '--', isWarning: false),
+            if (!_isLiveMode) ...[
+              const SizedBox(height: 8),
+              _jointCard(
+                'Tip',
+                'Tap Live to continue',
+                isWarning: false,
+              ),
+            ],
           ]
         : result.angles
             .map(
@@ -925,6 +1099,24 @@ class _AiCoachScreenState extends State<AiCoachScreen> {
                 ),
                 const SizedBox(height: 10),
                 ...angleCards,
+                if (!_isLiveMode && _pose != null) ...[
+                  const SizedBox(height: 8),
+                  _jointCard(
+                    'Left Knee',
+                    _jointAngle('Left Knee') == null
+                        ? '--'
+                        : '${_jointAngle('Left Knee')!.degrees.round()}°',
+                    isWarning: _jointAngle('Left Knee')?.isWarning ?? false,
+                  ),
+                  const SizedBox(height: 8),
+                  _jointCard(
+                    'Right Knee',
+                    _jointAngle('Right Knee') == null
+                        ? '--'
+                        : '${_jointAngle('Right Knee')!.degrees.round()}°',
+                    isWarning: _jointAngle('Right Knee')?.isWarning ?? false,
+                  ),
+                ],
               ],
             ),
           ),

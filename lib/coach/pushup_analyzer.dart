@@ -29,7 +29,12 @@ class PushupAnalyzer extends ExerciseAnalyzer {
     final legAngle = PoseMath.angle(pose, hip, knee, ankle);
 
     if (elbowAngle == null || backAngle == null || legAngle == null) {
-      return const AnalysisResult.waiting();
+      return AnalysisResult(
+        reps: _reps.reps,
+        phase: 'Get into frame',
+        poseVisible: false,
+        formGood: false,
+      );
     }
 
     final contraction = PoseMath.mapRange(elbowAngle, 75, 165, 100, 0);

@@ -144,22 +144,30 @@ class LivePoseOverlayPainter extends CustomPainter {
   }
 
   double _translateX(double x, Size canvasSize) {
+    final isFront = cameraLensDirection == CameraLensDirection.front;
+
     switch (rotation) {
       case InputImageRotation.rotation90deg:
-        return x *
-            canvasSize.width /
-            (Platform.isIOS ? imageSize.width : imageSize.height);
+        {
+          final scaled = x *
+              canvasSize.width /
+              (Platform.isIOS ? imageSize.width : imageSize.height);
+          // Front preview is mirrored; match that so the skeleton lines up.
+          return isFront ? canvasSize.width - scaled : scaled;
+        }
       case InputImageRotation.rotation270deg:
-        return canvasSize.width -
-            x *
-                canvasSize.width /
-                (Platform.isIOS ? imageSize.width : imageSize.height);
+        {
+          final scaled = x *
+              canvasSize.width /
+              (Platform.isIOS ? imageSize.width : imageSize.height);
+          return isFront ? scaled : canvasSize.width - scaled;
+        }
       case InputImageRotation.rotation0deg:
       case InputImageRotation.rotation180deg:
-        final scaled = x * canvasSize.width / imageSize.width;
-        return cameraLensDirection == CameraLensDirection.back
-            ? scaled
-            : canvasSize.width - scaled;
+        {
+          final scaled = x * canvasSize.width / imageSize.width;
+          return isFront ? canvasSize.width - scaled : scaled;
+        }
     }
   }
 

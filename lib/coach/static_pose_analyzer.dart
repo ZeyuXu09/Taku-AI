@@ -24,7 +24,13 @@ abstract class StaticPoseAnalyzer extends ExerciseAnalyzer {
     final result = check(pose);
     if (result == null) {
       _lastGoodFrame = null;
-      return const AnalysisResult.waiting();
+      return AnalysisResult(
+        reps: 0,
+        phase: 'Get into frame',
+        poseVisible: false,
+        formGood: false,
+        holdTime: _hold,
+      );
     }
 
     if (result.formGood) {
