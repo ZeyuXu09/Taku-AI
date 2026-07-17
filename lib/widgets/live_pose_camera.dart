@@ -4,6 +4,7 @@ import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_mlkit_pose_detection/google_mlkit_pose_detection.dart';
+import 'package:peakform_ai/coach/coach_joint_angle.dart';
 import 'package:peakform_ai/theme/app_colors.dart';
 import 'package:peakform_ai/widgets/live_pose_overlay_painter.dart';
 
@@ -12,10 +13,14 @@ class LivePoseCamera extends StatefulWidget {
   const LivePoseCamera({
     super.key,
     required this.onPose,
+    this.formGood = true,
+    this.angles = const [],
     this.highlightTypes = const {},
   });
 
   final void Function(Pose? pose) onPose;
+  final bool formGood;
+  final List<CoachJointAngle> angles;
   final Set<PoseLandmarkType> highlightTypes;
 
   @override
@@ -206,6 +211,8 @@ class _LivePoseCameraState extends State<LivePoseCamera>
             imageSize: _imageSize,
             rotation: _rotation,
             cameraLensDirection: _cameras[_cameraIndex].lensDirection,
+            formGood: widget.formGood,
+            angles: widget.angles,
             highlightTypes: widget.highlightTypes,
           ),
         ),

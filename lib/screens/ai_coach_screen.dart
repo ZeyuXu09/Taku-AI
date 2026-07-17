@@ -2,8 +2,13 @@ import 'dart:io';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_mlkit_pose_detection/google_mlkit_pose_detection.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:peakform_ai/coach/analysis_result.dart';
+import 'package:peakform_ai/coach/analyzer_factory.dart';
+import 'package:peakform_ai/coach/coach_exercise.dart';
+import 'package:peakform_ai/coach/exercise_analyzer.dart';
 import 'package:peakform_ai/theme/app_colors.dart';
 import 'package:peakform_ai/utils/pose_geometry.dart';
 import 'package:peakform_ai/widgets/live_pose_camera.dart';
@@ -42,6 +47,10 @@ class _AiCoachScreenState extends State<AiCoachScreen> {
   String? _errorMessage;
   _CoachInputMode _inputMode = _CoachInputMode.idle;
 
+  CoachExercise _exercise = CoachExercise.pushup;
+  ExerciseAnalyzer? _analyzer;
+  AnalysisResult _liveResult = const AnalysisResult.waiting();
+
   bool get _isLiveMode => _inputMode == _CoachInputMode.live;
 
   @override
@@ -70,6 +79,8 @@ class _AiCoachScreenState extends State<AiCoachScreen> {
       _inputMode = _CoachInputMode.photo;
       _image = File(pickedFile.path);
       _pose = null;
+      _analyzer = null;
+      _liveResult = const AnalysisResult.waiting();
       _errorMessage = null;
     });
 
@@ -83,6 +94,8 @@ class _AiCoachScreenState extends State<AiCoachScreen> {
       _pose = null;
       _errorMessage = null;
       _processing = false;
+      _analyzer = createAnalyzer(_exercise);
+      _liveResult = const AnalysisResult.waiting();
     });
   }
 
@@ -90,17 +103,57 @@ class _AiCoachScreenState extends State<AiCoachScreen> {
     setState(() {
       _inputMode = _CoachInputMode.idle;
       _pose = null;
+      _analyzer = null;
+      _liveResult = const AnalysisResult.waiting();
       _errorMessage = null;
     });
   }
 
+  void _selectExercise(CoachExercise exercise) {
+    if (_exercise == exercise) return;
+    setState(() {
+      _exercise = exercise;
+      if (_isLiveMode) {
+        _analyzer = createAnalyzer(exercise);
+        _liveResult = const AnalysisResult.waiting();
+      }
+    });
+  }
+
+  void _resetLiveSession() {
+    _analyzer?.reset();
+    setState(() => _liveResult = const AnalysisResult.waiting());
+  }
+
   void _onLivePose(Pose? pose) {
     if (!mounted || !_isLiveMode) return;
+
+    final analyzer = _analyzer;
+    if (pose == null || analyzer == null) {
+      setState(() {
+        _pose = pose;
+        _liveResult = const AnalysisResult.waiting();
+        _errorMessage =
+            'No pose detected. Stand fully in frame with good lighting.';
+      });
+      return;
+    }
+
+    final result = analyzer.update(pose, DateTime.now());
+
+    if (result.reps > _liveResult.reps) {
+      HapticFeedback.mediumImpact();
+    }
+    if (result.cueIsNew) {
+      HapticFeedback.heavyImpact();
+    }
+
     setState(() {
       _pose = pose;
-      _errorMessage = pose == null
-          ? 'No pose detected. Stand fully in frame with good lighting.'
-          : null;
+      _liveResult = result;
+      _errorMessage = result.poseVisible
+          ? null
+          : 'Get into frame — keep your full body visible.';
     });
   }
 
@@ -197,6 +250,26 @@ class _AiCoachScreenState extends State<AiCoachScreen> {
     return null;
   }
 
+  String get _coachCueText {
+    if (_errorMessage != null) return _errorMessage!;
+    if (_isLiveMode) {
+      if (!_liveResult.poseVisible) {
+        return 'Point the camera at yourself — keep your full body in frame.';
+      }
+      return _liveResult.cue ??
+          (_liveResult.formGood
+              ? 'Strong form. Keep going.'
+              : 'Adjust your position and hold steady.');
+    }
+    return coachFeedbackForPose(_pose);
+  }
+
+  String _formatHold(Duration duration) {
+    final minutes = duration.inMinutes;
+    final seconds = duration.inSeconds.remainder(60).toString().padLeft(2, '0');
+    return '$minutes:$seconds';
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -212,6 +285,7 @@ class _AiCoachScreenState extends State<AiCoachScreen> {
                   children: [
                     _buildFeaturedBadge(),
                     _buildTopBar(context),
+                    _buildExercisePicker(),
                     const SizedBox(height: 8),
                     _buildCameraFeed(),
                     _buildMetrics(),
@@ -352,6 +426,45 @@ class _AiCoachScreenState extends State<AiCoachScreen> {
     );
   }
 
+  Widget _buildExercisePicker() {
+    return SizedBox(
+      height: 40,
+      child: ListView.separated(
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        scrollDirection: Axis.horizontal,
+        itemCount: CoachExercise.values.length,
+        separatorBuilder: (_, _) => const SizedBox(width: 8),
+        itemBuilder: (context, index) {
+          final exercise = CoachExercise.values[index];
+          final selected = exercise == _exercise;
+          return ChoiceChip(
+            avatar: Icon(
+              exercise.icon,
+              size: 16,
+              color: selected ? AppColors.background : AppColors.textSecondary,
+            ),
+            label: Text(exercise.title),
+            selected: selected,
+            onSelected: (_) => _selectExercise(exercise),
+            selectedColor: AppColors.green,
+            backgroundColor: AppColors.card,
+            side: BorderSide(
+              color: selected
+                  ? AppColors.green
+                  : AppColors.cardBorder,
+            ),
+            labelStyle: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              color: selected ? AppColors.background : AppColors.textPrimary,
+            ),
+            showCheckmark: false,
+          );
+        },
+      ),
+    );
+  }
+
   Widget _buildCameraFeed() {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -365,6 +478,8 @@ class _AiCoachScreenState extends State<AiCoachScreen> {
               if (_isLiveMode)
                 LivePoseCamera(
                   onPose: _onLivePose,
+                  formGood: _liveResult.formGood,
+                  angles: _liveResult.angles,
                   highlightTypes: _highlightTypes,
                 )
               else if (_image != null)
@@ -378,7 +493,7 @@ class _AiCoachScreenState extends State<AiCoachScreen> {
                 Image.network(
                   AiCoachScreen._athleteUrl,
                   fit: BoxFit.cover,
-                  errorBuilder: (_, __, ___) =>
+                  errorBuilder: (_, _, _) =>
                       Container(color: AppColors.card),
                 ),
               Container(
@@ -416,17 +531,27 @@ class _AiCoachScreenState extends State<AiCoachScreen> {
                 top: 12,
                 left: 12,
                 child: _feedBadge(
-                  '${_pose?.landmarks.length ?? 0} KEYPOINTS',
+                  _isLiveMode
+                      ? _liveResult.phase.toUpperCase()
+                      : '${_pose?.landmarks.length ?? 0} KEYPOINTS',
                 ),
               ),
               Positioned(
                 top: 12,
                 right: 12,
                 child: _feedBadge(
-                  _pose == null
-                      ? 'AWAITING INPUT'
-                      : '${(_confidence * 100).round()}% CONFIDENCE',
-                  color: _pose == null ? null : AppColors.green,
+                  _isLiveMode
+                      ? (_exercise.isStatic
+                          ? _formatHold(_liveResult.holdTime)
+                          : '${_liveResult.reps} REPS')
+                      : (_pose == null
+                          ? 'AWAITING INPUT'
+                          : '${(_confidence * 100).round()}% CONFIDENCE'),
+                  color: _isLiveMode
+                      ? (_liveResult.formGood
+                          ? AppColors.green
+                          : AppColors.yellow)
+                      : (_pose == null ? null : AppColors.green),
                 ),
               ),
               Positioned(
@@ -458,12 +583,7 @@ class _AiCoachScreenState extends State<AiCoachScreen> {
                           text: 'AI COACH: ',
                           style: TextStyle(fontWeight: FontWeight.w800),
                         ),
-                        TextSpan(
-                          text: _errorMessage ??
-                              (_isLiveMode && _pose == null
-                                  ? 'Point the camera at yourself to analyze form in real time.'
-                                  : coachFeedbackForPose(_pose)),
-                        ),
+                        TextSpan(text: _coachCueText),
                       ],
                     ),
                   ),
@@ -476,14 +596,31 @@ class _AiCoachScreenState extends State<AiCoachScreen> {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    _feedStat(
-                      'Stability',
-                      _pose == null ? '--' : '${(_confidence * 100).round()}%',
-                    ),
-                    _feedStat(
-                      'People',
-                      _pose == null ? '0' : '1',
-                    ),
+                    if (_isLiveMode) ...[
+                      _feedStat(
+                        _exercise.isStatic ? 'Hold' : 'Reps',
+                        _exercise.isStatic
+                            ? _formatHold(_liveResult.holdTime)
+                            : '${_liveResult.reps}',
+                      ),
+                      _feedStat(
+                        'Form',
+                        !_liveResult.poseVisible
+                            ? '--'
+                            : (_liveResult.formGood ? 'GOOD' : 'FIX'),
+                      ),
+                    ] else ...[
+                      _feedStat(
+                        'Stability',
+                        _pose == null
+                            ? '--'
+                            : '${(_confidence * 100).round()}%',
+                      ),
+                      _feedStat(
+                        'People',
+                        _pose == null ? '0' : '1',
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -514,14 +651,24 @@ class _AiCoachScreenState extends State<AiCoachScreen> {
                 ),
               if (_isLiveMode)
                 Positioned(
-                  top: 12,
+                  top: 48,
                   left: 0,
                   right: 0,
                   child: Center(
-                    child: _PickerChip(
-                      icon: Icons.close_rounded,
-                      label: 'Exit Live',
-                      onTap: _stopLiveMode,
+                    child: Wrap(
+                      spacing: 8,
+                      children: [
+                        _PickerChip(
+                          icon: Icons.refresh_rounded,
+                          label: 'Reset',
+                          onTap: _resetLiveSession,
+                        ),
+                        _PickerChip(
+                          icon: Icons.close_rounded,
+                          label: 'Exit Live',
+                          onTap: _stopLiveMode,
+                        ),
+                      ],
                     ),
                   ),
                 ),
@@ -615,6 +762,10 @@ class _AiCoachScreenState extends State<AiCoachScreen> {
   }
 
   Widget _buildMetrics() {
+    if (_isLiveMode) {
+      return _buildLiveMetrics();
+    }
+
     final confidence = _confidence;
     final rating = _pose == null ? '--' : formRatingLabel(confidence);
     final progress = _pose == null ? 0.0 : confidence;
@@ -685,6 +836,95 @@ class _AiCoachScreenState extends State<AiCoachScreen> {
                   rightKnee == null ? '--' : '${rightKnee.degrees.round()}°',
                   isWarning: rightKnee?.isWarning ?? false,
                 ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLiveMetrics() {
+    final result = _liveResult;
+    final ringColor = !result.poseVisible
+        ? AppColors.textSecondary
+        : (result.formGood ? AppColors.green : AppColors.yellow);
+    final progress = !result.poseVisible
+        ? 0.0
+        : (result.formGood ? 1.0 : 0.45);
+    final centerValue = _exercise.isStatic
+        ? _formatHold(result.holdTime)
+        : '${result.reps}';
+    final centerLabel = _exercise.isStatic ? 'HOLD' : 'REPS';
+
+    final angleCards = result.angles.isEmpty
+        ? [
+            _jointCard('Waiting', '--', isWarning: false),
+          ]
+        : result.angles
+            .map(
+              (angle) => Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: _jointCard(
+                  angle.label,
+                  '${angle.degrees.round()}°',
+                  isWarning: !result.formGood,
+                ),
+              ),
+            )
+            .toList();
+
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          ProgressRing(
+            progress: progress,
+            size: 100,
+            strokeWidth: 8,
+            color: ringColor,
+            center: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  centerValue,
+                  style: const TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.textPrimary,
+                    height: 1,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  centerLabel,
+                  style: TextStyle(
+                    fontSize: 9,
+                    fontWeight: FontWeight.w700,
+                    color: ringColor,
+                    letterSpacing: 0.8,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '${_exercise.title.toUpperCase()} · ${result.phase.toUpperCase()}',
+                  style: const TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.textSecondary,
+                    letterSpacing: 1.2,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                ...angleCards,
               ],
             ),
           ),
