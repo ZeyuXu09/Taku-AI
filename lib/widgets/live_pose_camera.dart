@@ -10,8 +10,11 @@ import 'package:peakform_ai/widgets/live_pose_overlay_painter.dart';
 
 /// Live camera preview with on-device pose detection and pinch-to-zoom.
 ///
-/// Preview uses [BoxFit.cover] so the image is never stretched — only cropped
-/// to fill the available screen area in portrait or landscape.
+/// Orientation strategy (avoids double-rotation):
+/// - Capture is always **locked to the current UI orientation**, not free-floating
+///   sensors — so the preview does not flip “early” before Flutter’s UI rotates.
+/// - When the UI orientation changes, the controller is disposed and recreated
+///   once in the new orientation — no second widget-level [RotatedBox].
 class LivePoseCamera extends StatefulWidget {
   const LivePoseCamera({
     super.key,
@@ -46,10 +49,17 @@ class LivePoseCameraState extends State<LivePoseCamera>
   int _cameraIndex = -1;
   bool _busy = false;
   bool _disposed = false;
+  bool _rebuildingForOrientation = false;
+  /// Hides the preview while the phone/UI orientation is changing so the user
+  /// never sees the intermediate “sensor flip then UI flip” double rotation.
+  bool _hidePreviewForOrientationChange = false;
 
   Pose? _pose;
   Size _imageSize = Size.zero;
   InputImageRotation _rotation = InputImageRotation.rotation0deg;
+
+  /// Capture lock that matches the UI when this controller was created.
+  DeviceOrientation _lockedOrientation = DeviceOrientation.portraitUp;
 
   double _minZoom = 1.0;
   double _maxZoom = 1.0;
@@ -76,14 +86,45 @@ class LivePoseCameraState extends State<LivePoseCamera>
   @override
   void didChangeMetrics() {
     super.didChangeMetrics();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_disposed || !mounted) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (_disposed || !mounted || _rebuildingForOrientation) return;
       final orientation = MediaQuery.orientationOf(context);
       if (_lastUiOrientation == orientation) return;
+
+      // Hide immediately so a sensor-driven preview flip isn't visible before
+      // the Flutter UI catches up.
       _lastUiOrientation = orientation;
-      // Rebuild so CameraPreview / FittedBox pick up the new screen size.
-      setState(() {});
+      setState(() => _hidePreviewForOrientationChange = true);
+
+      await Future<void>.delayed(const Duration(milliseconds: 350));
+      if (_disposed || !mounted) return;
+      if (MediaQuery.orientationOf(context) != orientation) {
+        // Still settling / reversed — wait for a stable orientation.
+        if (mounted) {
+          setState(() => _hidePreviewForOrientationChange = false);
+        }
+        return;
+      }
+
+      await _rebuildControllerForUiOrientation();
+      if (mounted && !_disposed) {
+        setState(() => _hidePreviewForOrientationChange = false);
+      }
     });
+  }
+
+  /// Map Flutter UI orientation → capture lock. Sensors are ignored so the
+  /// camera cannot flip ahead of the UI.
+  DeviceOrientation _captureOrientationForUi() {
+    if (!mounted) return DeviceOrientation.portraitUp;
+    if (MediaQuery.orientationOf(context) == Orientation.portrait) {
+      return DeviceOrientation.portraitUp;
+    }
+    final padding = MediaQuery.paddingOf(context);
+    if (padding.right > padding.left + 8) {
+      return DeviceOrientation.landscapeRight;
+    }
+    return DeviceOrientation.landscapeLeft;
   }
 
   Future<void> _setup() async {
@@ -96,7 +137,13 @@ class LivePoseCameraState extends State<LivePoseCamera>
   }
 
   Future<void> _startController() async {
+    if (_cameraIndex < 0 || _cameras.isEmpty) return;
+
     final camera = _cameras[_cameraIndex];
+    final lockTo = mounted
+        ? _captureOrientationForUi()
+        : DeviceOrientation.portraitUp;
+
     final controller = CameraController(
       camera,
       ResolutionPreset.high,
@@ -107,13 +154,15 @@ class LivePoseCameraState extends State<LivePoseCamera>
     );
     _controller = controller;
     await controller.initialize();
-    if (_disposed) return;
+    if (_disposed) {
+      await controller.dispose();
+      return;
+    }
 
-    // Keep unlocked so CameraPreview can follow device rotation without
-    // fighting a locked capture orientation (which caused wrong direction).
     try {
-      await controller.unlockCaptureOrientation();
+      await controller.lockCaptureOrientation(lockTo);
     } catch (_) {}
+    _lockedOrientation = lockTo;
 
     await _initZoom(controller);
     if (_disposed) return;
@@ -121,7 +170,53 @@ class LivePoseCameraState extends State<LivePoseCamera>
     if (!controller.value.isStreamingImages) {
       await controller.startImageStream(_processImage);
     }
-    if (mounted) setState(() {});
+    if (mounted) {
+      _lastUiOrientation = MediaQuery.orientationOf(context);
+      setState(() {});
+    }
+  }
+
+  /// Tear down and recreate the camera once the UI orientation has changed.
+  /// One rebuild → one correct orientation (no early sensor flip + late UI flip).
+  Future<void> _rebuildControllerForUiOrientation() async {
+    if (_rebuildingForOrientation || _disposed) return;
+    final nextLock = _captureOrientationForUi();
+    if (nextLock == _lockedOrientation && _controller != null) {
+      if (mounted) setState(() {});
+      return;
+    }
+
+    _rebuildingForOrientation = true;
+    final previousZoom = _currentZoom;
+    try {
+      final old = _controller;
+      _controller = null;
+      if (mounted) setState(() {});
+
+      if (old != null) {
+        try {
+          if (old.value.isStreamingImages) {
+            await old.stopImageStream();
+          }
+        } catch (_) {}
+        await old.dispose();
+      }
+
+      if (_disposed) return;
+      await _startController();
+
+      if (!_disposed && _controller != null && previousZoom > _minZoom) {
+        try {
+          await _controller!.setZoomLevel(
+            previousZoom.clamp(_minZoom, _maxZoom),
+          );
+          _currentZoom = previousZoom.clamp(_minZoom, _maxZoom);
+        } catch (_) {}
+      }
+    } finally {
+      _rebuildingForOrientation = false;
+      if (mounted && !_disposed) setState(() {});
+    }
   }
 
   Future<void> _initZoom(CameraController controller) async {
@@ -234,7 +329,8 @@ class LivePoseCameraState extends State<LivePoseCamera>
     if (Platform.isIOS) {
       rotation = InputImageRotationValue.fromRawValue(sensorOrientation);
     } else {
-      var compensation = _orientations[controller.value.deviceOrientation];
+      // Use the UI-locked orientation, not a stale sensor reading.
+      var compensation = _orientations[_lockedOrientation];
       if (compensation == null) return null;
       if (camera.lensDirection == CameraLensDirection.front) {
         compensation = (sensorOrientation + compensation) % 360;
@@ -274,9 +370,16 @@ class LivePoseCameraState extends State<LivePoseCamera>
     if (controller == null || !controller.value.isInitialized) return;
     if (state == AppLifecycleState.inactive) {
       controller.stopImageStream();
-    } else if (state == AppLifecycleState.resumed &&
-        !controller.value.isStreamingImages) {
-      controller.startImageStream(_processImage);
+    } else if (state == AppLifecycleState.resumed) {
+      () async {
+        try {
+          await controller.lockCaptureOrientation(_lockedOrientation);
+        } catch (_) {}
+        if (!_disposed && !controller.value.isStreamingImages) {
+          await controller.startImageStream(_processImage);
+        }
+        if (mounted) setState(() {});
+      }();
     }
   }
 
@@ -292,7 +395,9 @@ class LivePoseCameraState extends State<LivePoseCamera>
   @override
   Widget build(BuildContext context) {
     final controller = _controller;
-    if (controller == null || !controller.value.isInitialized) {
+    if (_hidePreviewForOrientationChange ||
+        controller == null ||
+        !controller.value.isInitialized) {
       return const ColoredBox(
         color: Colors.black,
         child: Center(
@@ -302,13 +407,12 @@ class LivePoseCameraState extends State<LivePoseCamera>
     }
 
     final previewSize = controller.value.previewSize!;
-    final orientation = MediaQuery.orientationOf(context);
-
-    // previewSize is reported in sensor/landscape coords. CameraPreview applies
-    // its own rotation; we feed FittedBox the swapped size so BoxFit.cover fills
-    // without stretching (same approach as the official camera examples).
-    final previewWidth = previewSize.height;
-    final previewHeight = previewSize.width;
+    // Natural buffer size for a locked capture; BoxFit.cover = no stretch.
+    final isPortraitLock =
+        _lockedOrientation == DeviceOrientation.portraitUp ||
+            _lockedOrientation == DeviceOrientation.portraitDown;
+    final childWidth = isPortraitLock ? previewSize.height : previewSize.width;
+    final childHeight = isPortraitLock ? previewSize.width : previewSize.height;
 
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
@@ -324,12 +428,12 @@ class LivePoseCameraState extends State<LivePoseCamera>
               fit: BoxFit.cover,
               clipBehavior: Clip.hardEdge,
               child: SizedBox(
-                width: previewWidth,
-                height: previewHeight,
-                // Key forces CameraPreview to refresh after rotation.
+                width: childWidth,
+                height: childHeight,
                 child: CameraPreview(
                   controller,
-                  key: ValueKey(orientation),
+                  // Stable key per lock — avoids remount mid-frame during UI turn.
+                  key: ValueKey(_lockedOrientation),
                 ),
               ),
             ),

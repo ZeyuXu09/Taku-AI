@@ -76,6 +76,7 @@ class _AiCoachScreenState extends State<AiCoachScreen> {
 
     if (_session.preferLiveOnReturn) {
       _inputMode = _CoachInputMode.live;
+      _enableLiveOrientations();
     }
   }
 
@@ -85,7 +86,23 @@ class _AiCoachScreenState extends State<AiCoachScreen> {
     _session.setResult(_exercise, _liveResult);
     _session.markLeftScreen(wasLive: _isLiveMode);
     _poseDetector.close();
+    _lockPortraitOnly();
     super.dispose();
+  }
+
+  /// Landscape is allowed only while the live camera is open.
+  void _enableLiveOrientations() {
+    SystemChrome.setPreferredOrientations(const [
+      DeviceOrientation.portraitUp,
+      DeviceOrientation.landscapeLeft,
+      DeviceOrientation.landscapeRight,
+    ]);
+  }
+
+  void _lockPortraitOnly() {
+    SystemChrome.setPreferredOrientations(const [
+      DeviceOrientation.portraitUp,
+    ]);
   }
 
   Future<void> _getImage(ImageSource source) async {
@@ -103,6 +120,7 @@ class _AiCoachScreenState extends State<AiCoachScreen> {
   }
 
   void _startLiveMode() {
+    _enableLiveOrientations();
     setState(() {
       _inputMode = _CoachInputMode.live;
       _image = null;
@@ -116,6 +134,7 @@ class _AiCoachScreenState extends State<AiCoachScreen> {
 
   void _stopLiveMode() {
     _session.setResult(_exercise, _liveResult);
+    _lockPortraitOnly();
     setState(() {
       _inputMode = _CoachInputMode.idle;
       _pose = null;

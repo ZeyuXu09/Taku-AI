@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:peakform_ai/app_navigator.dart';
 import 'package:peakform_ai/config/supabase_config.dart';
 import 'package:peakform_ai/screens/auth_gate.dart';
 import 'package:peakform_ai/services/profile_avatar_service.dart';
@@ -35,10 +36,9 @@ Future<void> main() async {
     ),
   );
 
+  // Portrait-only for the rest of the app. AI Coach unlocks landscape itself.
   await SystemChrome.setPreferredOrientations(const [
     DeviceOrientation.portraitUp,
-    DeviceOrientation.landscapeLeft,
-    DeviceOrientation.landscapeRight,
   ]);
 
   runApp(const PeakFormApp());
@@ -51,6 +51,7 @@ class PeakFormApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'PeakForm AI',
+      navigatorKey: appNavigatorKey,
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         brightness: Brightness.dark,

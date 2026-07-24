@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:peakform_ai/app_navigator.dart';
 import 'package:peakform_ai/config/supabase_config.dart';
+import 'package:peakform_ai/screens/auth_gate.dart';
 import 'package:peakform_ai/services/auth_service.dart';
 import 'package:peakform_ai/services/supabase_service.dart';
 import 'package:peakform_ai/services/user_profile_service.dart';
@@ -196,8 +198,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     OutlinedButton(
                       onPressed: SupabaseConfig.isConfigured
                           ? () async {
-                              await AuthService.signOut();
+                              try {
+                                await AuthService.signOut();
+                              } catch (_) {}
                               UserProfileService.instance.clear();
+                              // Reset the entire nav stack to a fresh AuthGate
+                              // so AuthScreen is shown even if Settings was covering it.
+                              appNavigatorKey.currentState?.pushAndRemoveUntil(
+                                MaterialPageRoute<void>(
+                                  builder: (_) => const AuthGate(),
+                                ),
+                                (_) => false,
+                              );
                             }
                           : null,
                       style: OutlinedButton.styleFrom(
