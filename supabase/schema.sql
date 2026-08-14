@@ -188,8 +188,8 @@ create policy "Nutrition: users can delete own logs"
   using (auth.uid() = user_id);
 
 -- ---------------------------------------------------------------------------
--- 6. Profile training preferences (sports + intensity)
--- Run if you already created profiles before this section existed.
+-- 6. Profile training preferences (sports + intensity + onboarding flag)
+-- Run this whole section in order if your profiles table is older.
 -- ---------------------------------------------------------------------------
 alter table public.profiles
   add column if not exists sports text[] default array['Basic Workout']::text[];
@@ -200,9 +200,48 @@ alter table public.profiles
 alter table public.profiles
   add column if not exists training_location text default 'Home';
 
+alter table public.profiles
+  add column if not exists sports_setup_completed boolean default false;
+
 -- Backfill legacy single sport column into sports array.
 update public.profiles
 set sports = array[sport]::text[]
 where sport is not null
   and sport <> ''
   and (sports is null or sports = '{}'::text[]);
+
+-- Existing accounts already past onboarding (run AFTER sports column exists).
+update public.profiles
+set sports_setup_completed = true
+where sports_setup_completed is distinct from true
+  and (
+    (sports is not null and sports <> '{}'::text[])
+    or (sport is not null and sport <> '')
+  );
+
+-- ---------------------------------------------------------------------------
+-- 7. Body metrics for Growth Hub
+-- ---------------------------------------------------------------------------
+alter table public.profiles
+  add column if not exists height_inches numeric;
+
+alter table public.profiles
+  add column if not exists weight_lbs numeric;
+
+alter table public.profiles
+  add column if not exists body_fat_percent numeric;
+
+alter table public.profiles
+  add column if not exists muscle_mass_lbs numeric;
+
+alter table public.profiles
+  add column if not exists prev_height_inches numeric;
+
+alter table public.profiles
+  add column if not exists prev_weight_lbs numeric;
+
+alter table public.profiles
+  add column if not exists prev_body_fat_percent numeric;
+
+alter table public.profiles
+  add column if not exists prev_muscle_mass_lbs numeric;

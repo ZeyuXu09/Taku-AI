@@ -471,7 +471,7 @@ class LivePoseCameraState extends State<LivePoseCamera>
                   ),
                   child: Text(
                     '${_currentZoom.toStringAsFixed(1)}x',
-                    style: const TextStyle(
+                    style: TextStyle(
                       color: AppColors.textPrimary,
                       fontWeight: FontWeight.w700,
                       fontSize: 13,
@@ -490,7 +490,7 @@ class LivePoseCameraState extends State<LivePoseCamera>
                 child: InkWell(
                   customBorder: const CircleBorder(),
                   onTap: _switchCamera,
-                  child: const Padding(
+                  child: Padding(
                     padding: EdgeInsets.all(10),
                     child: Icon(
                       Icons.cameraswitch_rounded,

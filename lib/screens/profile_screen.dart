@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:peakform_ai/config/supabase_config.dart';
 import 'package:peakform_ai/screens/analytics_screen.dart';
+import 'package:peakform_ai/screens/coach_feedback_screen.dart';
 import 'package:peakform_ai/screens/growth_hub_screen.dart';
 import 'package:peakform_ai/screens/settings_screen.dart';
 import 'package:peakform_ai/screens/sports_selection_screen.dart';
@@ -144,7 +145,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                 ),
                 const SizedBox(height: 16),
-                const Text(
+                Text(
                   'Change Profile Photo',
                   textAlign: TextAlign.center,
                   style: TextStyle(
@@ -281,7 +282,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
+                    Text(
                       'Profile',
                       style: TextStyle(
                         fontSize: 19,
@@ -293,7 +294,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     const SizedBox(height: 24),
                     _buildProfileCard(),
                     const SizedBox(height: 28),
-                    const Text(
+                    Text(
                       'MENU',
                       style: TextStyle(
                         fontSize: 12,
@@ -303,6 +304,23 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ),
                     ),
                     const SizedBox(height: 12),
+                    _MenuItem(
+                      icon: Icons.chat_bubble_outline_rounded,
+                      iconColor: AppColors.green,
+                      iconBackground: AppColors.green.withValues(alpha: 0.15),
+                      title: 'Coach Feedback',
+                      description: 'All AI Coach cues from your sessions',
+                      onTap: () {
+                        _pushSubScreen(
+                          context,
+                          (routeContext) => CoachFeedbackScreen(
+                            onBack: _subScreenBackHandler(routeContext),
+                            onNavTap: _subScreenNavHandler(routeContext),
+                            navIndex: 4,
+                          ),
+                        );
+                      },
+                    ),
                     _MenuItem(
                       icon: Icons.trending_up_rounded,
                       iconColor: AppColors.green,
@@ -408,7 +426,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
+                Text(
                   'NAME',
                   style: TextStyle(
                     fontSize: 11,
@@ -424,7 +442,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   textInputAction: TextInputAction.done,
                   onEditingComplete: _saveNameIfNeeded,
                   onSubmitted: (_) => _saveNameIfNeeded(),
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.w700,
                     color: AppColors.textPrimary,
@@ -453,7 +471,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                 ),
                 const SizedBox(height: 6),
-                const Text(
+                Text(
                   'Tap photo to upload · tap name to edit',
                   style: TextStyle(
                     fontSize: 11,
@@ -496,7 +514,7 @@ class _MenuItem extends StatelessWidget {
         color: AppColors.card,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),
-          side: const BorderSide(color: AppColors.cardBorder),
+          side: BorderSide(color: AppColors.cardBorder),
         ),
         child: InkWell(
           onTap: onTap,
@@ -521,7 +539,7 @@ class _MenuItem extends StatelessWidget {
                     children: [
                       Text(
                         title,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 15,
                           fontWeight: FontWeight.w700,
                           color: AppColors.textPrimary,
@@ -530,7 +548,7 @@ class _MenuItem extends StatelessWidget {
                       const SizedBox(height: 2),
                       Text(
                         description,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 11,
                           color: AppColors.textSecondary,
                         ),
@@ -538,7 +556,7 @@ class _MenuItem extends StatelessWidget {
                     ],
                   ),
                 ),
-                const Icon(
+                Icon(
                   Icons.chevron_right_rounded,
                   color: AppColors.navInactive,
                   size: 20,

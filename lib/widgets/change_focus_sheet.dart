@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:peakform_ai/data/day_templates.dart';
 import 'package:peakform_ai/data/exercise_content.dart';
+import 'package:peakform_ai/data/sport_catalog.dart';
 import 'package:peakform_ai/models/training_exercise.dart';
 import 'package:peakform_ai/models/training_session.dart';
 import 'package:peakform_ai/services/training_session_override_service.dart';
@@ -69,7 +70,7 @@ class ChangeFocusSheet extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
+                  Text(
                     "Change Today's Focus",
                     style: TextStyle(
                       fontSize: 18,
@@ -82,7 +83,7 @@ class ChangeFocusSheet extends StatelessWidget {
                     session.isFocusCustomized
                         ? 'Custom focus · scheduled ${titleForFocus(session.scheduledFocus)}'
                         : 'Scheduled for today: ${titleForFocus(session.scheduledFocus)}',
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 12,
                       color: AppColors.textSecondary,
                     ),
@@ -142,7 +143,7 @@ class ChangeFocusSheet extends StatelessWidget {
                                     children: [
                                       Text(
                                         titleForFocus(focus),
-                                        style: const TextStyle(
+                                        style: TextStyle(
                                           fontSize: 14,
                                           fontWeight: FontWeight.w700,
                                           color: AppColors.textPrimary,
@@ -153,12 +154,26 @@ class ChangeFocusSheet extends StatelessWidget {
                                         descriptionForFocus(focus),
                                         maxLines: 2,
                                         overflow: TextOverflow.ellipsis,
-                                        style: const TextStyle(
+                                        style: TextStyle(
                                           fontSize: 11,
                                           height: 1.35,
                                           color: AppColors.textSecondary,
                                         ),
                                       ),
+                                      if (sportsThatBenefitFrom(focus)
+                                          .isNotEmpty) ...[
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          'Helps most: ${formatSportList(sportsThatBenefitFrom(focus))}',
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: TextStyle(
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.w600,
+                                            color: AppColors.green,
+                                          ),
+                                        ),
+                                      ],
                                     ],
                                   ),
                                 ),
@@ -212,7 +227,7 @@ class ChangeFocusSheet extends StatelessWidget {
       ),
       child: Text(
         label,
-        style: const TextStyle(
+        style: TextStyle(
           fontSize: 10,
           fontWeight: FontWeight.w600,
           color: AppColors.textTertiary,

@@ -36,6 +36,21 @@ enum TrainingIntensity {
     }
   }
 
+  /// Weekly training-day target used by the home streak.
+  int get sessionsPerWeek {
+    switch (this) {
+      case TrainingIntensity.casual:
+        return 3;
+      case TrainingIntensity.serious:
+        return 5;
+      case TrainingIntensity.professional:
+        return 6;
+    }
+  }
+
+  String get weeklyGoalLabel =>
+      '$sessionsPerWeek training${sessionsPerWeek == 1 ? '' : 's'} a week';
+
   static TrainingIntensity fromLabel(String? value) {
     switch (value?.toLowerCase()) {
       case 'casual':

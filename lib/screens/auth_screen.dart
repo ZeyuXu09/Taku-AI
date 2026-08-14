@@ -89,7 +89,7 @@ class _AuthScreenState extends State<AuthScreen> {
                     const SizedBox(height: 32),
                     Text(
                       _isSignUp ? 'Create account' : 'Welcome back',
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 24,
                         fontWeight: FontWeight.w800,
                         color: AppColors.textPrimary,
@@ -100,7 +100,7 @@ class _AuthScreenState extends State<AuthScreen> {
                       _isSignUp
                           ? 'Start tracking performance with PeakForm AI'
                           : 'Sign in to continue your training',
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 14,
                         color: AppColors.textSecondary,
                       ),
@@ -227,7 +227,7 @@ class _AuthScreenState extends State<AuthScreen> {
           child: const Icon(Icons.bolt_rounded, color: Colors.white, size: 28),
         ),
         const SizedBox(height: 12),
-        const Text(
+        Text(
           'PeakForm AI',
           style: TextStyle(
             fontSize: 22,
@@ -251,15 +251,15 @@ class _AuthScreenState extends State<AuthScreen> {
       keyboardType: keyboardType,
       obscureText: obscureText,
       validator: validator,
-      style: const TextStyle(color: AppColors.textPrimary),
+      style: TextStyle(color: AppColors.textPrimary),
       decoration: InputDecoration(
         labelText: label,
-        labelStyle: const TextStyle(color: AppColors.textSecondary),
+        labelStyle: TextStyle(color: AppColors.textSecondary),
         filled: true,
         fillColor: AppColors.card,
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
-          borderSide: const BorderSide(color: AppColors.cardBorder),
+          borderSide: BorderSide(color: AppColors.cardBorder),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),

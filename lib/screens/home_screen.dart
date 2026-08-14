@@ -10,6 +10,8 @@ import 'package:peakform_ai/services/training_plan_service.dart';
 import 'package:peakform_ai/services/training_preferences_service.dart';
 import 'package:peakform_ai/services/training_session_override_service.dart';
 import 'package:peakform_ai/services/user_profile_service.dart';
+import 'package:peakform_ai/services/workout_log_service.dart';
+import 'package:peakform_ai/utils/training_streak.dart';
 import 'package:peakform_ai/theme/app_colors.dart';
 import 'package:peakform_ai/utils/game_format.dart';
 import 'package:peakform_ai/widgets/peak_bottom_nav.dart';
@@ -75,15 +77,29 @@ class HomeScreen extends StatelessWidget {
                       builder: (context, _, __) {
                         final totals =
                             NutritionLogService.instance.totalsForDay(_today());
-                        return Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            _buildStatsRow(totals),
-                            const SizedBox(height: 24),
-                            _sectionTitle('Nutrition Today'),
-                            const SizedBox(height: 12),
-                            _buildNutritionCard(totals),
-                          ],
+                        return ValueListenableBuilder(
+                          valueListenable:
+                              TrainingPreferencesService.instance.preferences,
+                          builder: (context, _, __) {
+                            return ValueListenableBuilder<List<DateTime>>(
+                              valueListenable:
+                                  WorkoutLogService.instance.completedDays,
+                              builder: (context, _, __) {
+                                final streak =
+                                    WorkoutLogService.instance.streakFor();
+                                return Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    _buildStatsRow(totals, streak),
+                                    const SizedBox(height: 24),
+                                    _sectionTitle('Nutrition Today'),
+                                    const SizedBox(height: 12),
+                                    _buildNutritionCard(totals),
+                                  ],
+                                );
+                              },
+                            );
+                          },
                         );
                       },
                     ),
@@ -108,7 +124,7 @@ class HomeScreen extends StatelessWidget {
   Widget _sectionTitle(String title) {
     return Text(
       title,
-      style: const TextStyle(
+      style: TextStyle(
         fontSize: 15,
         fontWeight: FontWeight.w700,
         color: AppColors.textPrimary,
@@ -126,7 +142,7 @@ class HomeScreen extends StatelessWidget {
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
+                Text(
                   'Good Morning,',
                   style: TextStyle(
                     fontSize: 14,
@@ -136,7 +152,7 @@ class HomeScreen extends StatelessWidget {
                 const SizedBox(height: 2),
                 Text(
                   UserProfileService.instance.displayName,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 22,
                     fontWeight: FontWeight.w700,
                     color: AppColors.textPrimary,
@@ -187,10 +203,11 @@ class HomeScreen extends StatelessWidget {
                       begin: Alignment.bottomCenter,
                       end: Alignment.topCenter,
                       colors: [
-                        Color(0xF20B0E11),
-                        Color(0x660B0E11),
+                        Color(0xF2000000),
+                        Color(0x99000000),
+                        Color(0x33000000),
                       ],
-                      stops: [0.3, 1.0],
+                      stops: [0.15, 0.55, 1.0],
                     ),
                   ),
                 ),
@@ -215,11 +232,11 @@ class HomeScreen extends StatelessWidget {
                         child: Text(
                           session.isRestDay
                               ? 'Recovery day · ${session.sportSummary}'
-                              : 'AI-optimized for ${session.sportSummary}',
+                              : '${session.title} for ${session.sportSummary}',
                           style: const TextStyle(
                             fontSize: 10,
                             fontWeight: FontWeight.w600,
-                            color: AppColors.accentLight,
+                            color: Colors.white,
                           ),
                         ),
                       ),
@@ -229,7 +246,7 @@ class HomeScreen extends StatelessWidget {
                         style: const TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.w700,
-                          color: AppColors.textPrimary,
+                          color: Colors.white,
                         ),
                       ),
                       const SizedBox(height: 10),
@@ -290,25 +307,30 @@ class HomeScreen extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(icon, size: 14, color: AppColors.textSecondary),
+        Icon(icon, size: 14, color: Colors.white70),
         const SizedBox(width: 5),
         Text(
           label,
           style: const TextStyle(
             fontSize: 11,
-            color: AppColors.textTertiary,
+            color: Colors.white,
           ),
         ),
       ],
     );
   }
 
-  Widget _buildStatsRow(NutritionDayTotals totals) {
+  Widget _buildStatsRow(NutritionDayTotals totals, TrainingStreakStats streak) {
     return Row(
       children: [
-        Expanded(child: _statCard('12', 'Day Streak')),
+        Expanded(child: _statCard('${streak.dayStreak}', 'Day Streak')),
         const SizedBox(width: 10),
-        Expanded(child: _statCard('5', 'Sessions')),
+        Expanded(
+          child: _statCard(
+            '${streak.sessionsThisWeek}/${streak.weeklyGoal}',
+            'This Week',
+          ),
+        ),
         const SizedBox(width: 10),
         Expanded(
           child: _statCard(
@@ -332,7 +354,7 @@ class HomeScreen extends StatelessWidget {
         children: [
           Text(
             value,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 24,
               fontWeight: FontWeight.w800,
               color: AppColors.textPrimary,
@@ -342,7 +364,7 @@ class HomeScreen extends StatelessWidget {
           const SizedBox(height: 4),
           Text(
             label.toUpperCase(),
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 10,
               fontWeight: FontWeight.w500,
               color: AppColors.textSecondary,
@@ -427,7 +449,7 @@ class HomeScreen extends StatelessWidget {
           children: [
             Text(
               name,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 11,
                 fontWeight: FontWeight.w600,
                 color: AppColors.textTertiary,
@@ -435,7 +457,7 @@ class HomeScreen extends StatelessWidget {
             ),
             Text(
               amount,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 11,
                 color: AppColors.textSecondary,
               ),
@@ -474,7 +496,7 @@ class HomeScreen extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
+        gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: [AppColors.nextGameStart, AppColors.nextGameEnd],
@@ -490,7 +512,7 @@ class HomeScreen extends StatelessWidget {
             color: AppColors.textSecondary.withValues(alpha: 0.9),
           ),
           const SizedBox(height: 12),
-          const Text(
+          Text(
             'No upcoming games',
             style: TextStyle(
               fontSize: 16,
@@ -499,7 +521,7 @@ class HomeScreen extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 6),
-          const Text(
+          Text(
             'Add a game in Schedule',
             style: TextStyle(
               fontSize: 12,
@@ -524,7 +546,7 @@ class HomeScreen extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
+        gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: [AppColors.nextGameStart, AppColors.nextGameEnd],
@@ -536,7 +558,7 @@ class HomeScreen extends StatelessWidget {
         children: [
           Text(
             GameFormat.countdownLabel(game.gameAt),
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 40,
               fontWeight: FontWeight.w800,
               color: AppColors.textPrimary,
@@ -553,7 +575,7 @@ class HomeScreen extends StatelessWidget {
                 game.userTeamGradient,
               ),
               const SizedBox(width: 16),
-              const Text(
+              Text(
                 'VS',
                 style: TextStyle(
                   fontSize: 12,
@@ -572,7 +594,7 @@ class HomeScreen extends StatelessWidget {
           const SizedBox(height: 14),
           Text(
             GameFormat.shortDateTime(game.gameAt),
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 13,
               color: AppColors.textSecondary,
             ),
@@ -591,7 +613,7 @@ class HomeScreen extends StatelessWidget {
             child: Text(
               game.isHome ? 'Home game — prep starts today' : 'Away game — travel ready',
               textAlign: TextAlign.center,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w600,
                 color: AppColors.yellow,
@@ -630,7 +652,7 @@ class HomeScreen extends StatelessWidget {
         const SizedBox(height: 6),
         Text(
           name,
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 11,
             fontWeight: FontWeight.w600,
             color: AppColors.textTertiary,
@@ -664,13 +686,13 @@ class _CalorieRing extends StatelessWidget {
           children: [
             Text(
               caloriesLabel,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.w800,
                 color: AppColors.textPrimary,
               ),
             ),
-            const Text(
+            Text(
               'calories',
               style: TextStyle(
                 fontSize: 10,

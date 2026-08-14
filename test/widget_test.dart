@@ -295,6 +295,7 @@ void main() {
     expect(find.text('Maximize Your Potential'), findsOneWidget);
     expect(find.text("5'10\""), findsOneWidget);
     expect(find.text('Body Composition'), findsOneWidget);
+    expect(find.text('Update Height & Body Metrics'), findsOneWidget);
   });
 
   testWidgets('Analytics screen shows gauges and PRs', (tester) async {

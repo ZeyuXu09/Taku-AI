@@ -182,7 +182,7 @@ class _CustomizeWorkoutSheetState extends State<CustomizeWorkoutSheet> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text(
+                          Text(
                             'Customize Workout',
                             style: TextStyle(
                               fontSize: 18,
@@ -193,7 +193,7 @@ class _CustomizeWorkoutSheetState extends State<CustomizeWorkoutSheet> {
                           const SizedBox(height: 4),
                           Text(
                             '${widget.session.title} · ${focusLabel(widget.session.focus)}',
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 12,
                               color: AppColors.textSecondary,
                             ),
@@ -290,7 +290,7 @@ class _CustomizeWorkoutSheetState extends State<CustomizeWorkoutSheet> {
   Widget _sectionLabel(String text) {
     return Text(
       text,
-      style: const TextStyle(
+      style: TextStyle(
         fontSize: 13,
         fontWeight: FontWeight.w700,
         color: AppColors.textPrimary,
@@ -344,7 +344,7 @@ class _FocusSummaryCard extends StatelessWidget {
                   children: [
                     Text(
                       "Today's focus",
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 11,
                         color: AppColors.textTertiary,
                         fontWeight: FontWeight.w600,
@@ -353,7 +353,7 @@ class _FocusSummaryCard extends StatelessWidget {
                     const SizedBox(height: 2),
                     Text(
                       session.title,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w700,
                         color: AppColors.textPrimary,
@@ -362,7 +362,7 @@ class _FocusSummaryCard extends StatelessWidget {
                   ],
                 ),
               ),
-              const Icon(
+              Icon(
                 Icons.chevron_right_rounded,
                 color: AppColors.textTertiary,
               ),
@@ -406,7 +406,7 @@ class _EditableRow extends StatelessWidget {
                 children: [
                   Text(
                     name,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w700,
                       color: AppColors.textPrimary,
@@ -416,7 +416,7 @@ class _EditableRow extends StatelessWidget {
                     const SizedBox(height: 3),
                     Text(
                       detail,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 11,
                         color: AppColors.textSecondary,
                       ),
@@ -569,7 +569,7 @@ class _ExercisePickerSheet extends StatelessWidget {
               padding: const EdgeInsets.all(20),
               child: Text(
                 title,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 17,
                   fontWeight: FontWeight.w700,
                   color: AppColors.textPrimary,
@@ -578,7 +578,7 @@ class _ExercisePickerSheet extends StatelessWidget {
             ),
             Expanded(
               child: options.isEmpty
-                  ? const Center(
+                  ? Center(
                       child: Text(
                         'No other exercises available.',
                         style: TextStyle(color: AppColors.textSecondary),
@@ -609,7 +609,7 @@ class _ExercisePickerSheet extends StatelessWidget {
                                         children: [
                                           Text(
                                             exercise.name,
-                                            style: const TextStyle(
+                                            style: TextStyle(
                                               fontSize: 14,
                                               fontWeight: FontWeight.w700,
                                               color: AppColors.textPrimary,
@@ -618,7 +618,7 @@ class _ExercisePickerSheet extends StatelessWidget {
                                           const SizedBox(height: 4),
                                           Text(
                                             focusLabel(exercise.focus),
-                                            style: const TextStyle(
+                                            style: TextStyle(
                                               fontSize: 11,
                                               color: AppColors.textSecondary,
                                             ),
@@ -626,7 +626,7 @@ class _ExercisePickerSheet extends StatelessWidget {
                                         ],
                                       ),
                                     ),
-                                    const Icon(
+                                    Icon(
                                       Icons.chevron_right_rounded,
                                       color: AppColors.textTertiary,
                                     ),

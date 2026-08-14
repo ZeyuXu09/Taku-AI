@@ -8,7 +8,6 @@ import 'package:peakform_ai/coach/rep_counter.dart';
 
 class BicepCurlAnalyzer extends ExerciseAnalyzer {
   final _reps = RepCounter(enterTop: 80, enterBottom: 20);
-  final _feedback = FeedbackManager();
 
   @override
   bool get isStatic => false;
@@ -16,7 +15,6 @@ class BicepCurlAnalyzer extends ExerciseAnalyzer {
   @override
   void reset() {
     _reps.reset();
-    _feedback.reset();
   }
 
   @override
@@ -40,18 +38,22 @@ class BicepCurlAnalyzer extends ExerciseAnalyzer {
     _reps.update(contraction);
 
     final armSwinging = upperArmAngle != null && upperArmAngle > 40;
-
-    final decision = _feedback.evaluate([
-      Fault('swing', armSwinging, 'Keep your upper arm still'),
-    ], now);
+    final faults = [
+      Fault(
+        'swing',
+        armSwinging,
+        'Keep your upper arm still',
+        detail:
+            'Your upper arm drifted forward, which turns the curl into a swing. Pin your elbow to your side and only hinge at the elbow so the biceps do the lifting.',
+      ),
+    ];
 
     return AnalysisResult(
       reps: _reps.reps,
       phase: contraction >= 50 ? 'Curl' : 'Extend',
       poseVisible: true,
       formGood: !armSwinging,
-      cue: decision.message,
-      cueIsNew: decision.isNew,
+      faults: faults,
       angles: [
         CoachJointAngle('Elbow', elbowAngle, elbow),
         if (upperArmAngle != null)

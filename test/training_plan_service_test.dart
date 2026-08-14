@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:peakform_ai/data/day_templates.dart';
+import 'package:peakform_ai/data/sport_catalog.dart';
 import 'package:peakform_ai/models/training_exercise.dart';
 import 'package:peakform_ai/models/training_intensity.dart';
 import 'package:peakform_ai/models/training_location.dart';
@@ -145,6 +146,51 @@ void main() {
     expect(
       session.exercises.any((e) => !e.exercise.id.startsWith('gym_')),
       isTrue,
+    );
+  });
+
+  test('changing focus swaps in sport-relevant exercises', () async {
+    SharedPreferences.setMockInitialValues({});
+    await TrainingSessionOverrideService.instance.load();
+
+    TrainingPreferencesService.instance.preferences.value =
+        const TrainingPreferences(
+      sports: ['Soccer'],
+      intensity: TrainingIntensity.casual,
+      location: TrainingLocation.home,
+    );
+
+    final monday = DateTime(2026, 6, 29);
+    final power = TrainingPlanService.instance.sessionForDate(monday);
+    expect(power.focus, TrainingFocus.power);
+
+    await TrainingSessionOverrideService.instance.saveFocus(
+      date: monday,
+      focus: TrainingFocus.agility,
+    );
+    final agility = TrainingPlanService.instance.sessionForDate(monday);
+
+    expect(agility.focus, TrainingFocus.agility);
+    expect(
+      agility.exercises.map((e) => e.exercise.id).toSet(),
+      isNot(equals(power.exercises.map((e) => e.exercise.id).toSet())),
+    );
+    expect(
+      [...power.exercises, ...agility.exercises].every(
+        (item) => item.exercise.id != 'pull_ups',
+      ),
+      isTrue,
+    );
+  });
+
+  test('power focus lists jumping sports as top beneficiaries', () {
+    expect(
+      sportsThatBenefitFrom(TrainingFocus.power),
+      containsAll(['Basketball', 'Volleyball']),
+    );
+    expect(
+      sportsThatBenefitFrom(TrainingFocus.endurance),
+      contains('Soccer'),
     );
   });
 }

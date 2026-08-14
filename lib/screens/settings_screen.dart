@@ -5,6 +5,7 @@ import 'package:peakform_ai/screens/auth_gate.dart';
 import 'package:peakform_ai/services/auth_service.dart';
 import 'package:peakform_ai/services/supabase_service.dart';
 import 'package:peakform_ai/services/user_profile_service.dart';
+import 'package:peakform_ai/services/theme_service.dart';
 import 'package:peakform_ai/theme/app_colors.dart';
 import 'package:peakform_ai/widgets/peak_bottom_nav.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -29,7 +30,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _pushNotifications = true;
   bool _workoutReminders = true;
   bool _gameDayAlerts = false;
-  bool _darkMode = true;
 
   @override
   void initState() {
@@ -146,8 +146,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       _SettingsToggleRow(
                         icon: Icons.lightbulb_outline_rounded,
                         label: 'Dark Mode',
-                        value: _darkMode,
-                        onChanged: (v) => setState(() => _darkMode = v),
+                        value: ThemeService.instance.isDark.value,
+                        onChanged: (v) => ThemeService.instance.setDark(v),
                         prefsStyle: true,
                       ),
                       _SettingsRow(
@@ -233,7 +233,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       ),
                     ),
                     const SizedBox(height: 16),
-                    const Center(
+                    Center(
                       child: Text(
                         'PeakForm AI · Build 2025.02',
                         style: TextStyle(
@@ -266,7 +266,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           iconSize: 16,
           onTap: widget.onBack ?? () => Navigator.of(context).pop(),
         ),
-        const Text(
+        Text(
           'Settings',
           style: TextStyle(
             fontSize: 18,
@@ -285,7 +285,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       padding: const EdgeInsets.only(bottom: 10),
       child: Text(
         title.toUpperCase(),
-        style: const TextStyle(
+        style: TextStyle(
           fontSize: 12,
           fontWeight: FontWeight.w600,
           color: AppColors.textSecondary,
@@ -410,7 +410,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         side: BorderSide(
           color: isSelected
               ? AppColors.accent
-              : Colors.white.withValues(alpha: 0.08),
+              : AppColors.cardBorder,
           width: 2,
         ),
       ),
@@ -427,7 +427,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   children: [
                     Text(
                       title,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w600,
                         color: AppColors.textPrimary,
@@ -435,7 +435,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ),
                     Text(
                       desc,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 11,
                         color: AppColors.textSecondary,
                       ),
@@ -466,13 +466,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
 InputDecoration _dialogInputDecoration({String? hint}) {
   return InputDecoration(
     hintText: hint,
-    hintStyle: const TextStyle(color: AppColors.navInactive),
+    hintStyle: TextStyle(color: AppColors.navInactive),
     filled: true,
     fillColor: AppColors.barTrack,
     contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
     enabledBorder: OutlineInputBorder(
       borderRadius: BorderRadius.circular(12),
-      borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.08), width: 2),
+      borderSide: BorderSide(color: AppColors.cardBorder, width: 2),
     ),
     focusedBorder: OutlineInputBorder(
       borderRadius: BorderRadius.circular(12),
@@ -532,7 +532,7 @@ class _SettingsRow extends StatelessWidget {
                     children: [
                       Text(
                         label,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.w600,
                           color: AppColors.textPrimary,
@@ -542,7 +542,7 @@ class _SettingsRow extends StatelessWidget {
                         const SizedBox(height: 2),
                         Text(
                           value!,
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 11,
                             color: AppColors.textSecondary,
                           ),
@@ -552,7 +552,7 @@ class _SettingsRow extends StatelessWidget {
                   ),
                 ),
                 if (showChevron)
-                  const Icon(
+                  Icon(
                     Icons.chevron_right_rounded,
                     color: AppColors.navInactive,
                     size: 18,
@@ -564,7 +564,7 @@ class _SettingsRow extends StatelessWidget {
         if (showDivider)
           Divider(
             height: 1,
-            color: Colors.white.withValues(alpha: 0.06),
+            color: AppColors.divider,
           ),
       ],
     );
@@ -614,7 +614,7 @@ class _SettingsToggleRow extends StatelessWidget {
               Expanded(
                 child: Text(
                   label,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
                     color: AppColors.textPrimary,
@@ -624,7 +624,6 @@ class _SettingsToggleRow extends StatelessWidget {
               Switch.adaptive(
                 value: value,
                 onChanged: onChanged,
-                activeColor: AppColors.accent,
               ),
             ],
           ),
@@ -632,7 +631,7 @@ class _SettingsToggleRow extends StatelessWidget {
         if (showDivider)
           Divider(
             height: 1,
-            color: Colors.white.withValues(alpha: 0.06),
+            color: AppColors.divider,
           ),
       ],
     );
@@ -664,7 +663,7 @@ class _SettingsDialog extends StatelessWidget {
       insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(20),
-        side: BorderSide(color: Colors.white.withValues(alpha: 0.08)),
+        side: BorderSide(color: AppColors.cardBorder),
       ),
       child: ConstrainedBox(
         constraints: BoxConstraints(maxHeight: maxHeight),
@@ -679,7 +678,7 @@ class _SettingsDialog extends StatelessWidget {
                 children: [
                   Text(
                     title,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w700,
                       color: AppColors.textPrimary,
@@ -784,7 +783,7 @@ class _EmailDialogState extends State<_EmailDialog> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
+          Text(
             'EMAIL ADDRESS',
             style: TextStyle(
               fontSize: 10,
@@ -797,7 +796,7 @@ class _EmailDialogState extends State<_EmailDialog> {
           TextField(
             controller: _controller,
             keyboardType: TextInputType.emailAddress,
-            style: const TextStyle(color: AppColors.textPrimary),
+            style: TextStyle(color: AppColors.textPrimary),
             decoration: _dialogInputDecoration(),
           ),
           if (_errorMessage != null) ...[
@@ -951,7 +950,7 @@ class _PasswordDialogState extends State<_PasswordDialog> {
       children: [
         Text(
           label,
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 10,
             fontWeight: FontWeight.w600,
             color: AppColors.textSecondary,
@@ -962,7 +961,7 @@ class _PasswordDialogState extends State<_PasswordDialog> {
         TextField(
           controller: controller,
           obscureText: true,
-          style: const TextStyle(color: AppColors.textPrimary),
+          style: TextStyle(color: AppColors.textPrimary),
           decoration: _dialogInputDecoration(hint: hint),
         ),
       ],
@@ -989,7 +988,7 @@ class _IconBoxButton extends StatelessWidget {
       color: AppColors.card,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(10),
-        side: const BorderSide(color: AppColors.cardBorder),
+        side: BorderSide(color: AppColors.cardBorder),
       ),
       child: InkWell(
         onTap: onTap,

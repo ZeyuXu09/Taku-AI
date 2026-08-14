@@ -288,7 +288,7 @@ class _NutritionScannerScreenState extends State<NutritionScannerScreen> {
             iconSize: 16,
             onTap: () => Navigator.of(context).pop(),
           ),
-          const Text(
+          Text(
             'Scan Barcode',
             style: TextStyle(
               fontSize: 16,
@@ -346,7 +346,7 @@ class _NutritionScannerScreenState extends State<NutritionScannerScreen> {
                               ? 'Looking up product...'
                               : 'Point camera at product barcode',
                       textAlign: TextAlign.center,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w500,
                         color: AppColors.textSecondary,
@@ -412,9 +412,9 @@ class _NutritionScannerScreenState extends State<NutritionScannerScreen> {
       ),
       child: Column(
         children: [
-          const Icon(Icons.qr_code_scanner_rounded, color: AppColors.textSecondary),
+          Icon(Icons.qr_code_scanner_rounded, color: AppColors.textSecondary),
           const SizedBox(height: 10),
-          const Text(
+          Text(
             'Scan a packaged food barcode',
             style: TextStyle(
               fontSize: 14,
@@ -423,7 +423,7 @@ class _NutritionScannerScreenState extends State<NutritionScannerScreen> {
             ),
           ),
           const SizedBox(height: 4),
-          const Text(
+          Text(
             'Nutrition data comes from Open Food Facts.',
             textAlign: TextAlign.center,
             style: TextStyle(
@@ -480,7 +480,7 @@ class _NutritionScannerScreenState extends State<NutritionScannerScreen> {
                   children: [
                     TextField(
                       controller: _nameController,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w700,
                         color: AppColors.textPrimary,
@@ -493,7 +493,7 @@ class _NutritionScannerScreenState extends State<NutritionScannerScreen> {
                     ),
                     Text(
                       '${result.basisLabel} · ${result.barcode}',
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 11,
                         color: AppColors.textSecondary,
                       ),
@@ -525,7 +525,7 @@ class _NutritionScannerScreenState extends State<NutritionScannerScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Text(
+              Text(
                 'Servings',
                 style: TextStyle(
                   fontSize: 12,
@@ -544,7 +544,7 @@ class _NutritionScannerScreenState extends State<NutritionScannerScreen> {
                 padding: const EdgeInsets.symmetric(horizontal: 12),
                 child: Text(
                   _formatNumber(_servings),
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.w700,
                     color: AppColors.textPrimary,
@@ -620,7 +620,7 @@ class _NutritionScannerScreenState extends State<NutritionScannerScreen> {
       width: 44,
       height: 44,
       color: AppColors.barTrack,
-      child: const Icon(Icons.restaurant_rounded, color: AppColors.textSecondary),
+      child: Icon(Icons.restaurant_rounded, color: AppColors.textSecondary),
     );
   }
 
@@ -642,7 +642,7 @@ class _NutritionScannerScreenState extends State<NutritionScannerScreen> {
               controller: controller,
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
               textAlign: TextAlign.center,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 14,
                 fontWeight: FontWeight.w800,
                 color: AppColors.textPrimary,
@@ -652,7 +652,7 @@ class _NutritionScannerScreenState extends State<NutritionScannerScreen> {
                 border: InputBorder.none,
                 hintText: '—',
                 suffixText: suffix.isEmpty ? null : suffix,
-                suffixStyle: const TextStyle(
+                suffixStyle: TextStyle(
                   fontSize: 10,
                   color: AppColors.textSecondary,
                 ),
@@ -660,7 +660,7 @@ class _NutritionScannerScreenState extends State<NutritionScannerScreen> {
             ),
             Text(
               label,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 9,
                 fontWeight: FontWeight.w500,
                 color: AppColors.textSecondary,
@@ -684,7 +684,7 @@ class _NutritionScannerScreenState extends State<NutritionScannerScreen> {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
+            Text(
               'Recent Scans',
               style: TextStyle(
                 fontSize: 14,
@@ -740,7 +740,7 @@ class _NutritionScannerScreenState extends State<NutritionScannerScreen> {
                             textAlign: TextAlign.center,
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 10,
                               fontWeight: FontWeight.w600,
                               color: AppColors.textSecondary,
@@ -765,7 +765,7 @@ class _NutritionScannerScreenState extends State<NutritionScannerScreen> {
       width: 80,
       height: 80,
       color: AppColors.barTrack,
-      child: const Icon(Icons.restaurant_rounded, color: AppColors.textSecondary),
+      child: Icon(Icons.restaurant_rounded, color: AppColors.textSecondary),
     );
   }
 
@@ -868,7 +868,7 @@ class _ScannerIconButton extends StatelessWidget {
       color: AppColors.card.withValues(alpha: 0.8),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(10),
-        side: BorderSide(color: Colors.white.withValues(alpha: 0.08)),
+        side: BorderSide(color: AppColors.cardBorder),
       ),
       child: InkWell(
         onTap: onTap,

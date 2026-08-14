@@ -131,7 +131,7 @@ class _AddFoodSheetState extends State<AddFoodSheet> {
               ),
             ),
             const SizedBox(height: 16),
-            const Text(
+            Text(
               'Add Food',
               style: TextStyle(
                 fontSize: 18,
@@ -144,7 +144,7 @@ class _AddFoodSheetState extends State<AddFoodSheet> {
               _isToday
                   ? 'Log a meal manually for today'
                   : 'Log a meal for ${DateFormat('EEEE, MMM d').format(widget.logDate)}',
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 12,
                 color: AppColors.textSecondary,
               ),
@@ -239,7 +239,7 @@ class _AddFoodSheetState extends State<AddFoodSheet> {
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const Text(
+                Text(
                   'Servings',
                   style: TextStyle(
                     fontSize: 12,
@@ -258,7 +258,7 @@ class _AddFoodSheetState extends State<AddFoodSheet> {
                     _servings == _servings.roundToDouble()
                         ? '${_servings.toInt()}'
                         : _servings.toStringAsFixed(1),
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w700,
                       color: AppColors.textPrimary,
@@ -332,7 +332,7 @@ class _AddFoodSheetState extends State<AddFoodSheet> {
       padding: const EdgeInsets.only(bottom: 6),
       child: Text(
         label,
-        style: const TextStyle(
+        style: TextStyle(
           fontSize: 11,
           fontWeight: FontWeight.w600,
           color: AppColors.textSecondary,
@@ -351,13 +351,13 @@ class _AddFoodSheetState extends State<AddFoodSheet> {
       controller: controller,
       keyboardType: keyboardType,
       textInputAction: textInputAction,
-      style: const TextStyle(
+      style: TextStyle(
         fontSize: 14,
         color: AppColors.textPrimary,
       ),
       decoration: InputDecoration(
         hintText: hint,
-        hintStyle: const TextStyle(color: AppColors.textSecondary),
+        hintStyle: TextStyle(color: AppColors.textSecondary),
         filled: true,
         fillColor: AppColors.barTrack,
         border: OutlineInputBorder(

@@ -14,8 +14,8 @@ class PeakBottomNav extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      decoration: const BoxDecoration(
-        color: Color(0xF20B0E11),
+      decoration: BoxDecoration(
+        color: AppColors.navBar,
         border: Border(top: BorderSide(color: AppColors.cardBorder)),
       ),
       child: SafeArea(

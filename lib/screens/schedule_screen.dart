@@ -101,7 +101,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        const Text(
+        Text(
           'Game Schedule',
           style: TextStyle(
             fontSize: 19,
@@ -140,7 +140,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
             children: [
               Text(
                 monthLabel,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 15,
                   fontWeight: FontWeight.w700,
                   color: AppColors.textPrimary,
@@ -169,7 +169,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                     child: Center(
                       child: Text(
                         day,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 10,
                           fontWeight: FontWeight.w600,
                           color: AppColors.navInactive,
@@ -238,7 +238,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
             color: AppColors.textSecondary.withValues(alpha: 0.8),
           ),
           const SizedBox(height: 12),
-          const Text(
+          Text(
             'No games scheduled',
             style: TextStyle(
               fontSize: 15,
@@ -247,7 +247,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
             ),
           ),
           const SizedBox(height: 6),
-          const Text(
+          Text(
             'Tap + to add your first game',
             style: TextStyle(
               fontSize: 12,
@@ -339,7 +339,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
   Widget _sectionTitle(String title) {
     return Text(
       title,
-      style: const TextStyle(
+      style: TextStyle(
         fontSize: 15,
         fontWeight: FontWeight.w700,
         color: AppColors.textPrimary,
@@ -354,7 +354,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
         color: AppColors.card,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),
-          side: const BorderSide(color: AppColors.cardBorder),
+          side: BorderSide(color: AppColors.cardBorder),
         ),
         child: InkWell(
           onTap: () => _showEditGameSheet(game),
@@ -391,7 +391,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                     children: [
                       Text(
                         'vs ${game.opponentName}',
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.w700,
                           color: AppColors.textPrimary,
@@ -400,7 +400,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                       const SizedBox(height: 3),
                       Text(
                         GameFormat.metaLine(game.gameAt),
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 11,
                           color: AppColors.textSecondary,
                         ),
@@ -430,7 +430,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                 ),
                 IconButton(
                   onPressed: () => _showEditGameSheet(game),
-                  icon: const Icon(
+                  icon: Icon(
                     Icons.edit_outlined,
                     size: 18,
                     color: AppColors.navInactive,
@@ -438,7 +438,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                 ),
                 IconButton(
                   onPressed: () => _confirmDeleteGame(game),
-                  icon: const Icon(
+                  icon: Icon(
                     Icons.delete_outline_rounded,
                     size: 18,
                     color: AppColors.navInactive,
@@ -457,13 +457,13 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: AppColors.card,
-        title: const Text(
+        title: Text(
           'Delete game?',
           style: TextStyle(color: AppColors.textPrimary),
         ),
         content: Text(
           'Remove vs ${game.opponentName} on ${GameFormat.metaLine(game.gameAt)}?',
-          style: const TextStyle(color: AppColors.textSecondary),
+          style: TextStyle(color: AppColors.textSecondary),
         ),
         actions: [
           TextButton(
@@ -676,7 +676,7 @@ class _GameFormSheetState extends State<_GameFormSheet> {
           Text(
             _isEditing ? 'Edit Game' : 'Add Game',
             textAlign: TextAlign.center,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.w700,
               color: AppColors.textPrimary,
@@ -685,10 +685,10 @@ class _GameFormSheetState extends State<_GameFormSheet> {
           const SizedBox(height: 20),
           TextField(
             controller: _opponentController,
-            style: const TextStyle(color: AppColors.textPrimary),
+            style: TextStyle(color: AppColors.textPrimary),
             decoration: InputDecoration(
               labelText: 'Opponent',
-              labelStyle: const TextStyle(color: AppColors.textSecondary),
+              labelStyle: TextStyle(color: AppColors.textSecondary),
               filled: true,
               fillColor: AppColors.barTrack,
               border: OutlineInputBorder(
@@ -942,7 +942,7 @@ class _PlanCard extends StatelessWidget {
           Text(
             label,
             textAlign: TextAlign.center,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 11,
               fontWeight: FontWeight.w700,
               color: AppColors.textPrimary,
@@ -967,7 +967,7 @@ class _IconBoxButton extends StatelessWidget {
       color: AppColors.card,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(10),
-        side: const BorderSide(color: AppColors.cardBorder),
+        side: BorderSide(color: AppColors.cardBorder),
       ),
       child: InkWell(
         onTap: onTap,

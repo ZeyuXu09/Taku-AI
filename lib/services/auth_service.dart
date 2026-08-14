@@ -1,4 +1,5 @@
 import 'package:peakform_ai/services/supabase_service.dart';
+import 'package:peakform_ai/services/training_preferences_service.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class AuthService {
@@ -17,8 +18,16 @@ class AuthService {
     await SupabaseService.client.auth.signUp(
       email: email,
       password: password,
-      data: {'full_name': fullName},
+      data: {
+        'full_name': fullName,
+        'needs_sports_setup': true,
+      },
     );
+
+    // Require sports selection the first time this account enters the app.
+    if (SupabaseService.currentUser != null) {
+      await TrainingPreferencesService.instance.markSportsSetupPending();
+    }
   }
 
   static Future<void> signIn({

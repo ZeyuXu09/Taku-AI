@@ -28,10 +28,34 @@ class DownwardDogAnalyzer extends StaticPoseAnalyzer {
     final formGood = armsStraight && legsStraight && hipInRange;
 
     final faults = [
-      Fault('elbow', !armsStraight, 'Straighten your arms'),
-      Fault('hipLow', hipAngle < 52, 'Push your hips up and back'),
-      Fault('hipHigh', hipAngle > 70, 'Bring your hands and feet closer'),
-      Fault('legs', !legsStraight, 'Straighten your legs'),
+      Fault(
+        'elbow',
+        !armsStraight,
+        'Straighten your arms',
+        detail:
+            'Your arms bent, which collapses the pose. Press the floor away and straighten the elbows so your shoulders can open and the stretch reaches the back of the legs.',
+      ),
+      Fault(
+        'hipLow',
+        hipAngle < 52,
+        'Push your hips up and back',
+        detail:
+            'Your hips sat too low. Push your hips up and back to make a tall upside-down V, even if the heels stay light off the floor.',
+      ),
+      Fault(
+        'hipHigh',
+        hipAngle > 70,
+        'Bring your hands and feet closer',
+        detail:
+            'The V was too tight, with hips stacking too high over the hands. Step your feet back a little so the hips can sit high without rounding your spine.',
+      ),
+      Fault(
+        'legs',
+        !legsStraight,
+        'Straighten your legs',
+        detail:
+            'Your knees bent a lot. Straighten your legs as much as your hamstrings allow — a soft bend is fine, but keep reaching the heels toward the floor.',
+      ),
     ];
 
     return (

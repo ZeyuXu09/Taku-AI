@@ -1,9 +1,13 @@
 class Fault {
-  const Fault(this.key, this.active, this.message);
+  const Fault(this.key, this.active, this.message, {this.detail});
 
   final String key;
   final bool active;
   final String message;
+  final String? detail;
+
+  String get coaching =>
+      (detail != null && detail!.trim().isNotEmpty) ? detail! : message;
 }
 
 class FeedbackDecision {

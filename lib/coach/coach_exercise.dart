@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 /// Exercises the live AI coach can analyze.
-enum CoachExercise { pushup, plank, bicepCurl, downwardDog }
+enum CoachExercise { pushup, plank, bicepCurl, downwardDog, pullup }
 
 extension CoachExerciseInfo on CoachExercise {
   String get title => switch (this) {
@@ -9,6 +9,7 @@ extension CoachExerciseInfo on CoachExercise {
         CoachExercise.plank => 'Plank',
         CoachExercise.bicepCurl => 'Bicep Curls',
         CoachExercise.downwardDog => 'Downward Dog',
+        CoachExercise.pullup => 'Pull-ups',
       };
 
   String get description => switch (this) {
@@ -16,6 +17,8 @@ extension CoachExerciseInfo on CoachExercise {
         CoachExercise.plank => 'Holds form on hips, shoulders and legs.',
         CoachExercise.bicepCurl => 'Counts curls and keeps your upper arm still.',
         CoachExercise.downwardDog => 'Guides you into the inverted-V hold.',
+        CoachExercise.pullup =>
+          'Counts reps when your head clears your hands.',
       };
 
   IconData get icon => switch (this) {
@@ -23,6 +26,7 @@ extension CoachExerciseInfo on CoachExercise {
         CoachExercise.plank => Icons.horizontal_rule,
         CoachExercise.bicepCurl => Icons.sports_mma,
         CoachExercise.downwardDog => Icons.self_improvement,
+        CoachExercise.pullup => Icons.arrow_upward,
       };
 
   String get tag => isStatic ? 'Hold' : 'Reps';

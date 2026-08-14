@@ -76,7 +76,8 @@ class TrainingPlanService {
       durationMinutes: duration,
       estimatedCalories: estimatedCalories(intensity, duration),
       programDescription: descriptionForFocus(focus),
-      sportSummary: _sportSummary(sports),
+      sportSummary: formatSportList(sports),
+      focusBenefitsSummary: formatSportList(sportsThatBenefitFrom(focus)),
       intensity: intensity,
     );
 
@@ -92,16 +93,37 @@ class TrainingPlanService {
     required Set<String> excludeIds,
     bool includeRecovery = false,
   }) {
-    return activeExerciseLibrary().where((exercise) {
+    final sports = _selectedSports();
+    final pool = activeExerciseLibrary().where((exercise) {
       if (excludeIds.contains(exercise.id)) return false;
       if (exercise.isWarmup || exercise.isCooldown) return false;
       if (!includeRecovery && exercise.focus == TrainingFocus.recovery) {
         return false;
       }
-      if (focus == TrainingFocus.mixed) return true;
-      return exercise.focus == focus || exercise.focus == TrainingFocus.mixed;
-    }).toList()
-      ..sort((a, b) => a.name.compareTo(b.name));
+      if (focus == TrainingFocus.mixed) {
+        return _scoreExercise(exercise, sports) > 0;
+      }
+      final matchesFocus =
+          exercise.focus == focus || exercise.focus == TrainingFocus.mixed;
+      return matchesFocus && _scoreExercise(exercise, sports) > 0;
+    }).toList();
+
+    final options = pool.isNotEmpty
+        ? pool
+        : activeExerciseLibrary().where((exercise) {
+            if (excludeIds.contains(exercise.id)) return false;
+            if (exercise.isWarmup || exercise.isCooldown) return false;
+            if (focus == TrainingFocus.mixed) return true;
+            return exercise.focus == focus;
+          }).toList();
+
+    options.sort((a, b) {
+      final byScore =
+          _scoreExercise(b, sports).compareTo(_scoreExercise(a, sports));
+      if (byScore != 0) return byScore;
+      return a.name.compareTo(b.name);
+    });
+    return options;
   }
 
   List<TrainingExercise> routineAlternatives({required Set<String> excludeIds}) {
@@ -144,6 +166,7 @@ class TrainingPlanService {
       estimatedCalories: base.estimatedCalories,
       programDescription: base.programDescription,
       sportSummary: base.sportSummary,
+      focusBenefitsSummary: base.focusBenefitsSummary,
       intensity: base.intensity,
       isRestDay: base.isRestDay,
     );
@@ -170,6 +193,7 @@ class TrainingPlanService {
       estimatedCalories: base.estimatedCalories,
       programDescription: base.programDescription,
       sportSummary: base.sportSummary,
+      focusBenefitsSummary: base.focusBenefitsSummary,
       intensity: base.intensity,
       isRestDay: base.isRestDay,
     );
@@ -231,7 +255,8 @@ class TrainingPlanService {
       durationMinutes: duration,
       estimatedCalories: estimatedCalories(intensity, duration),
       programDescription: description,
-      sportSummary: _sportSummary(sports),
+      sportSummary: formatSportList(sports),
+      focusBenefitsSummary: formatSportList(sportsThatBenefitFrom(focus)),
       intensity: intensity,
       isRestDay: true,
     );
@@ -245,7 +270,8 @@ class TrainingPlanService {
     required int count,
     int rotationOffset = 0,
   }) {
-    final pool = activeExerciseLibrary()
+    final library = activeExerciseLibrary();
+    var pool = library
         .where(
           (exercise) =>
               exercise.focus == focus &&
@@ -254,23 +280,41 @@ class TrainingPlanService {
         )
         .toList();
 
-    if (pool.isEmpty) {
+    var relevant = pool
+        .where((exercise) => _scoreExercise(exercise, sports) > 0)
+        .toList();
+
+    if (relevant.length < count && focus != TrainingFocus.mixed) {
+      final mixedFill = library.where(
+        (exercise) =>
+            exercise.focus == TrainingFocus.mixed &&
+            !exercise.isWarmup &&
+            !exercise.isCooldown &&
+            _scoreExercise(exercise, sports) > 0 &&
+            relevant.every((picked) => picked.id != exercise.id),
+      );
+      relevant = [...relevant, ...mixedFill];
+    }
+
+    if (relevant.isEmpty) {
       return _pickFromMixed(
         sports,
         intensity,
         date,
         count,
         rotationOffset: rotationOffset,
+        focus: focus,
       );
     }
 
     return _selectFromPool(
-      pool,
+      relevant,
       sports,
       intensity,
       date,
       count,
       rotationOffset: rotationOffset,
+      focus: focus,
     );
   }
 
@@ -280,9 +324,10 @@ class TrainingPlanService {
     DateTime date,
     int count, {
     int rotationOffset = 0,
+    TrainingFocus focus = TrainingFocus.mixed,
   }) {
     final pool = activeExerciseLibrary()
-        .where((e) => !e.isWarmup && !e.isCooldown)
+        .where((exercise) => !exercise.isWarmup && !exercise.isCooldown)
         .toList();
     return _selectFromPool(
       pool,
@@ -291,6 +336,7 @@ class TrainingPlanService {
       date,
       count,
       rotationOffset: rotationOffset,
+      focus: focus,
     );
   }
 
@@ -311,6 +357,7 @@ class TrainingPlanService {
       date,
       count,
       rotationOffset: rotationOffset,
+      focus: TrainingFocus.recovery,
     );
   }
 
@@ -321,21 +368,32 @@ class TrainingPlanService {
     DateTime date,
     int count, {
     int rotationOffset = 0,
+    TrainingFocus focus = TrainingFocus.mixed,
   }) {
     if (pool.isEmpty) return const [];
 
-    final scored = pool
+    final relevant = pool
+        .where((exercise) => _scoreExercise(exercise, sports) > 0)
+        .toList();
+    final working = relevant.isNotEmpty ? relevant : pool;
+
+    final scored = working
         .map((exercise) => MapEntry(exercise, _scoreExercise(exercise, sports)))
         .toList()
-      ..sort((a, b) => b.value.compareTo(a.value));
+      ..sort((a, b) {
+        final byScore = b.value.compareTo(a.value);
+        if (byScore != 0) return byScore;
+        return a.key.id.compareTo(b.key.id);
+      });
 
     final week = _isoWeekNumber(date);
     final startIndex =
-        (week * 7 + date.weekday + rotationOffset) % scored.length;
+        (week * 7 + date.weekday + rotationOffset + focus.index * 11) %
+            scored.length;
     final selected = <TrainingExercise>[];
     final usedIds = <String>{};
 
-    for (var i = 0; selected.length < count && i < pool.length * 3; i++) {
+    for (var i = 0; selected.length < count && i < scored.length * 2; i++) {
       final index = (startIndex + i) % scored.length;
       final exercise = scored[index].key;
       if (usedIds.add(exercise.id)) {
@@ -353,6 +411,12 @@ class TrainingPlanService {
         .toList();
   }
 
+  List<String> _selectedSports() {
+    final sports =
+        TrainingPreferencesService.instance.preferences.value.sports;
+    return sports.isEmpty ? [SportCatalog.defaultSport] : sports;
+  }
+
   int _scoreExercise(TrainingExercise exercise, List<String> sports) {
     var score = 0;
     for (final sport in sports) {
@@ -368,11 +432,5 @@ class TrainingPlanService {
     final thursday = date.add(Duration(days: 4 - (date.weekday % 7)));
     final yearStart = DateTime(thursday.year, 1, 1);
     return ((thursday.difference(yearStart).inDays) / 7).floor() + 1;
-  }
-
-  String _sportSummary(List<String> sports) {
-    if (sports.length == 1) return sports.first;
-    if (sports.length == 2) return '${sports[0]} & ${sports[1]}';
-    return '${sports.take(2).join(', ')} +${sports.length - 2}';
   }
 }

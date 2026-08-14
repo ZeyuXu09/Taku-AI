@@ -138,7 +138,7 @@ class _TrainingBody extends StatelessWidget {
               onTap: onBack ?? () => Navigator.of(context).maybePop(),
             ),
             const SizedBox(width: 10),
-            const Text(
+            Text(
               "Today's Training",
               style: TextStyle(
                 fontSize: 19,
@@ -181,7 +181,7 @@ class _TrainingBody extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
+        gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: [AppColors.nextGameStart, AppColors.nextGameEnd],
@@ -197,7 +197,7 @@ class _TrainingBody extends StatelessWidget {
               Expanded(
                 child: Text(
                   session.isRestDay ? 'REST DAY' : "TODAY'S FOCUS",
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.w700,
                     color: AppColors.yellow,
@@ -215,7 +215,7 @@ class _TrainingBody extends StatelessWidget {
                       color: AppColors.yellow.withValues(alpha: 0.35),
                     ),
                   ),
-                  child: const Text(
+                  child: Text(
                     'Custom',
                     style: TextStyle(
                       fontSize: 10,
@@ -261,7 +261,7 @@ class _TrainingBody extends StatelessWidget {
           const SizedBox(height: 8),
           Text(
             session.title,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 24,
               fontWeight: FontWeight.w800,
               color: AppColors.textPrimary,
@@ -290,7 +290,7 @@ class _TrainingBody extends StatelessWidget {
                 ),
                 child: Text(
                   session.intensity.effortBadge,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.w600,
                     color: AppColors.green,
@@ -302,13 +302,13 @@ class _TrainingBody extends StatelessWidget {
           const SizedBox(height: 14),
           RichText(
             text: TextSpan(
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 13,
                 height: 1.5,
                 color: AppColors.textSecondary,
               ),
               children: [
-                const TextSpan(
+                TextSpan(
                   text: 'Program: ',
                   style: TextStyle(
                     fontWeight: FontWeight.w600,
@@ -317,14 +317,25 @@ class _TrainingBody extends StatelessWidget {
                 ),
                 TextSpan(text: session.programDescription),
                 const TextSpan(text: '\n'),
-                const TextSpan(
-                  text: 'Sports: ',
+                TextSpan(
+                  text: 'Your sports: ',
                   style: TextStyle(
                     fontWeight: FontWeight.w600,
                     color: AppColors.textTertiary,
                   ),
                 ),
                 TextSpan(text: session.sportSummary),
+                if (session.focusBenefitsSummary.isNotEmpty) ...[
+                  const TextSpan(text: '\n'),
+                  TextSpan(
+                    text: 'This focus helps most: ',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textTertiary,
+                    ),
+                  ),
+                  TextSpan(text: session.focusBenefitsSummary),
+                ],
               ],
             ),
           ),
@@ -362,7 +373,7 @@ class _TrainingBody extends StatelessWidget {
         const SizedBox(width: 5),
         Text(
           label,
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 12,
             fontWeight: FontWeight.w500,
             color: AppColors.textTertiary,
@@ -404,7 +415,7 @@ class _TrainingBody extends StatelessWidget {
   Widget _sectionTitle(String title) {
     return Text(
       title,
-      style: const TextStyle(
+      style: TextStyle(
         fontSize: 15,
         fontWeight: FontWeight.w700,
         color: AppColors.textPrimary,
@@ -424,7 +435,7 @@ class _TrainingBody extends StatelessWidget {
         color: AppColors.card,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),
-          side: const BorderSide(color: AppColors.cardBorder),
+          side: BorderSide(color: AppColors.cardBorder),
         ),
         clipBehavior: Clip.antiAlias,
         child: InkWell(
@@ -452,7 +463,7 @@ class _TrainingBody extends StatelessWidget {
                     children: [
                       Text(
                         exercise.name,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.w700,
                           color: AppColors.textPrimary,
@@ -461,7 +472,7 @@ class _TrainingBody extends StatelessWidget {
                       const SizedBox(height: 4),
                       Text(
                         exercise.prescription,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 11,
                           color: AppColors.textSecondary,
                           height: 1.4,
@@ -486,7 +497,7 @@ class _TrainingBody extends StatelessWidget {
       width: 56,
       height: 56,
       color: AppColors.barTrack,
-      child: const Icon(
+      child: Icon(
         Icons.fitness_center_rounded,
         color: AppColors.textSecondary,
       ),
@@ -500,7 +511,7 @@ class _TrainingBody extends StatelessWidget {
         color: AppColors.card,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),
-          side: const BorderSide(color: AppColors.cardBorder),
+          side: BorderSide(color: AppColors.cardBorder),
         ),
         clipBehavior: Clip.antiAlias,
         child: InkWell(
@@ -515,7 +526,7 @@ class _TrainingBody extends StatelessWidget {
                     children: [
                       Text(
                         routine.name,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.w700,
                           color: AppColors.textPrimary,
@@ -524,7 +535,7 @@ class _TrainingBody extends StatelessWidget {
                       const SizedBox(height: 3),
                       Text(
                         routine.prescription,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 11,
                           color: AppColors.textSecondary,
                         ),
@@ -556,7 +567,7 @@ class _TrainingBody extends StatelessWidget {
           DecoratedBox(
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(16),
-              gradient: const LinearGradient(
+              gradient: LinearGradient(
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
                 colors: [AppColors.green, Color(0xFF00C853)],
@@ -574,7 +585,7 @@ class _TrainingBody extends StatelessWidget {
               child: InkWell(
                 onTap: () => openActiveWorkout(context, session: session),
                 borderRadius: BorderRadius.circular(16),
-                child: const Padding(
+                child: Padding(
                   padding: EdgeInsets.symmetric(vertical: 16),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
@@ -677,7 +688,7 @@ class _IconBoxButton extends StatelessWidget {
       color: AppColors.card,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(10),
-        side: const BorderSide(color: AppColors.cardBorder),
+        side: BorderSide(color: AppColors.cardBorder),
       ),
       child: InkWell(
         onTap: onTap,

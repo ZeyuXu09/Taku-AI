@@ -29,10 +29,34 @@ class PlankAnalyzer extends StaticPoseAnalyzer {
     final formGood = elbowStacked && bodyStraight && legsStraight;
 
     final faults = [
-      Fault('hipSag', hipAngle < 150, 'Straighten your body — hips in line'),
-      Fault('elbow', !elbowStacked, 'Stack your shoulders over your elbows'),
-      Fault('legs', !legsStraight, 'Straighten your legs'),
-      Fault('pike', hipsPiked, 'Lower your hips'),
+      Fault(
+        'hipSag',
+        hipAngle < 150,
+        'Straighten your body — hips in line',
+        detail:
+            'Your hips sagged, which loads the lower back. Squeeze your glutes and pull your belly in so shoulders, hips, and heels stay in one long line.',
+      ),
+      Fault(
+        'elbow',
+        !elbowStacked,
+        'Stack your shoulders over your elbows',
+        detail:
+            'Your shoulders drifted off your elbows. Stack shoulders over elbows and press the floor away so the plank stays stable instead of collapsing forward.',
+      ),
+      Fault(
+        'legs',
+        !legsStraight,
+        'Straighten your legs',
+        detail:
+            'Your legs softened during the hold. Straighten them and press your heels back so the plank is a full-body brace, not just an upper-body hold.',
+      ),
+      Fault(
+        'pike',
+        hipsPiked,
+        'Lower your hips',
+        detail:
+            'Your hips were too high, more like a pike than a plank. Lower them until your body is a long line from head to heels.',
+      ),
     ];
 
     return (

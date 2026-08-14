@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:peakform_ai/models/training_exercise.dart';
 import 'package:peakform_ai/models/training_session.dart';
 import 'package:peakform_ai/screens/exercise_detail_screen.dart';
+import 'package:peakform_ai/services/workout_log_service.dart';
 import 'package:peakform_ai/theme/app_colors.dart';
 import 'package:peakform_ai/widgets/progress_ring.dart';
 
@@ -168,11 +169,11 @@ class _ActiveWorkoutScreenState extends State<ActiveWorkoutScreen> {
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: AppColors.card,
-        title: const Text(
+        title: Text(
           'Leave workout?',
           style: TextStyle(color: AppColors.textPrimary),
         ),
-        content: const Text(
+        content: Text(
           'Your progress will not be saved if you leave now.',
           style: TextStyle(color: AppColors.textSecondary),
         ),
@@ -195,13 +196,19 @@ class _ActiveWorkoutScreenState extends State<ActiveWorkoutScreen> {
     _timer?.cancel();
     if (!mounted) return;
 
+    await WorkoutLogService.instance.logCompletion(
+      title: widget.session.title,
+      durationMinutes: _totalExerciseElapsed.inMinutes,
+    );
+    if (!mounted) return;
+
     await showDialog<void>(
       context: context,
       barrierDismissible: false,
       builder: (context) => AlertDialog(
         backgroundColor: AppColors.card,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Row(
+        title: Row(
           children: [
             Icon(Icons.check_circle_rounded, color: AppColors.green),
             SizedBox(width: 10),
@@ -248,11 +255,11 @@ class _ActiveWorkoutScreenState extends State<ActiveWorkoutScreen> {
       children: [
         Text(
           label,
-          style: const TextStyle(color: AppColors.textSecondary),
+          style: TextStyle(color: AppColors.textSecondary),
         ),
         Text(
           value,
-          style: const TextStyle(
+          style: TextStyle(
             color: AppColors.textPrimary,
             fontWeight: FontWeight.w600,
           ),
@@ -331,7 +338,7 @@ class _ActiveWorkoutScreenState extends State<ActiveWorkoutScreen> {
                 Text(
                   _items.first.name,
                   textAlign: TextAlign.center,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 20,
                     fontWeight: FontWeight.w800,
                     color: AppColors.textPrimary,
@@ -341,7 +348,7 @@ class _ActiveWorkoutScreenState extends State<ActiveWorkoutScreen> {
                 Text(
                   '${_items.length} exercises · Tap start when you are ready',
                   textAlign: TextAlign.center,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 13,
                     color: AppColors.textSecondary,
                     height: 1.4,
@@ -387,7 +394,7 @@ class _ActiveWorkoutScreenState extends State<ActiveWorkoutScreen> {
                 Navigator.of(context).pop();
               }
             },
-            icon: const Icon(Icons.close_rounded, color: AppColors.textSecondary),
+            icon: Icon(Icons.close_rounded, color: AppColors.textSecondary),
           ),
           Expanded(
             child: Column(
@@ -395,7 +402,7 @@ class _ActiveWorkoutScreenState extends State<ActiveWorkoutScreen> {
               children: [
                 Text(
                   widget.session.isRestDay ? 'Recovery Session' : 'Active Workout',
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.w600,
                     color: AppColors.textSecondary,
@@ -404,7 +411,7 @@ class _ActiveWorkoutScreenState extends State<ActiveWorkoutScreen> {
                 ),
                 Text(
                   widget.session.title,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 17,
                     fontWeight: FontWeight.w700,
                     color: AppColors.textPrimary,
@@ -420,7 +427,7 @@ class _ActiveWorkoutScreenState extends State<ActiveWorkoutScreen> {
               color: AppColors.card,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(10),
-                side: const BorderSide(color: AppColors.cardBorder),
+                side: BorderSide(color: AppColors.cardBorder),
               ),
               child: InkWell(
                 onTap: _togglePause,
@@ -502,7 +509,7 @@ class _ActiveWorkoutScreenState extends State<ActiveWorkoutScreen> {
         children: [
           Text(
             formatWorkoutDuration(_totalExerciseElapsed),
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 28,
               fontWeight: FontWeight.w800,
               color: AppColors.textPrimary,
@@ -520,7 +527,7 @@ class _ActiveWorkoutScreenState extends State<ActiveWorkoutScreen> {
             ),
           ),
           const SizedBox(height: 4),
-          const Text(
+          Text(
             'Total exercise',
             style: TextStyle(
               fontSize: 11,
@@ -553,7 +560,7 @@ class _ActiveWorkoutScreenState extends State<ActiveWorkoutScreen> {
             color: _restComplete ? AppColors.green : AppColors.accent,
             center: Text(
               formatWorkoutDuration(_restRemaining),
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w800,
                 color: AppColors.textPrimary,
@@ -642,7 +649,7 @@ class _ActiveWorkoutScreenState extends State<ActiveWorkoutScreen> {
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: AppColors.green.withValues(alpha: 0.35)),
       ),
-      child: const Row(
+      child: Row(
         children: [
           Icon(Icons.check_circle_outline_rounded, color: AppColors.green, size: 20),
           SizedBox(width: 10),
@@ -670,7 +677,7 @@ class _ActiveWorkoutScreenState extends State<ActiveWorkoutScreen> {
           children: [
             Text(
               'Exercise ${_currentIndex + 1} of ${_items.length}',
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w600,
                 color: AppColors.textSecondary,
@@ -729,7 +736,7 @@ class _ActiveWorkoutScreenState extends State<ActiveWorkoutScreen> {
           Text(
             exercise.name,
             textAlign: TextAlign.center,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 22,
               fontWeight: FontWeight.w800,
               color: AppColors.textPrimary,
@@ -739,7 +746,7 @@ class _ActiveWorkoutScreenState extends State<ActiveWorkoutScreen> {
           Text(
             exercise.prescription,
             textAlign: TextAlign.center,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 14,
               color: AppColors.textSecondary,
               height: 1.4,
@@ -762,7 +769,7 @@ class _ActiveWorkoutScreenState extends State<ActiveWorkoutScreen> {
       width: double.infinity,
       height: 140,
       color: AppColors.barTrack,
-      child: const Icon(
+      child: Icon(
         Icons.fitness_center_rounded,
         size: 48,
         color: AppColors.textSecondary,
@@ -783,7 +790,7 @@ class _ActiveWorkoutScreenState extends State<ActiveWorkoutScreen> {
             label: const Text('Previous'),
             style: OutlinedButton.styleFrom(
               foregroundColor: AppColors.textPrimary,
-              side: const BorderSide(color: AppColors.cardBorder),
+              side: BorderSide(color: AppColors.cardBorder),
               padding: const EdgeInsets.symmetric(vertical: 14),
             ),
           ),
@@ -810,7 +817,7 @@ class _ActiveWorkoutScreenState extends State<ActiveWorkoutScreen> {
   Widget _buildFinishBar(BuildContext context) {
     return Container(
       padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: AppColors.background,
         border: Border(top: BorderSide(color: AppColors.cardBorder)),
       ),

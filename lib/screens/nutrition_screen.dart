@@ -153,7 +153,7 @@ class _NutritionScreenState extends State<NutritionScreen> {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        const Text(
+        Text(
           'Nutrition',
           style: TextStyle(
             fontSize: 19,
@@ -251,7 +251,7 @@ class _NutritionScreenState extends State<NutritionScreen> {
           children: [
             Text(
               _numberFormat.format(totals.calories.round()),
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 32,
                 fontWeight: FontWeight.w800,
                 color: AppColors.textPrimary,
@@ -260,7 +260,7 @@ class _NutritionScreenState extends State<NutritionScreen> {
             ),
             Text(
               '/ ${_numberFormat.format(NutritionLogService.calorieGoal.round())} kcal',
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w500,
                 color: AppColors.textSecondary,
@@ -307,7 +307,7 @@ class _NutritionScreenState extends State<NutritionScreen> {
         const SizedBox(height: 2),
         Text(
           label.toUpperCase(),
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 10,
             fontWeight: FontWeight.w600,
             color: AppColors.textSecondary,
@@ -361,7 +361,7 @@ class _NutritionScreenState extends State<NutritionScreen> {
           color: color,
           center: Text(
             value,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 11,
               fontWeight: FontWeight.w700,
               color: AppColors.textPrimary,
@@ -371,7 +371,7 @@ class _NutritionScreenState extends State<NutritionScreen> {
         const SizedBox(height: 8),
         Text(
           label,
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 10,
             fontWeight: FontWeight.w600,
             color: AppColors.textSecondary,
@@ -384,7 +384,7 @@ class _NutritionScreenState extends State<NutritionScreen> {
   Widget _sectionTitle(String title) {
     return Text(
       title,
-      style: const TextStyle(
+      style: TextStyle(
         fontSize: 15,
         fontWeight: FontWeight.w700,
         color: AppColors.textPrimary,
@@ -409,7 +409,7 @@ class _NutritionScreenState extends State<NutritionScreen> {
             color: AppColors.textSecondary.withValues(alpha: 0.8),
           ),
           const SizedBox(height: 12),
-          const Text(
+          Text(
             'No meals logged yet',
             style: TextStyle(
               fontSize: 15,
@@ -418,7 +418,7 @@ class _NutritionScreenState extends State<NutritionScreen> {
             ),
           ),
           const SizedBox(height: 6),
-          const Text(
+          Text(
             'Scan a barcode or add food manually.',
             textAlign: TextAlign.center,
             style: TextStyle(
@@ -479,7 +479,7 @@ class _NutritionScreenState extends State<NutritionScreen> {
                 children: [
                   Text(
                     log.productName,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w700,
                       color: AppColors.textPrimary,
@@ -488,7 +488,7 @@ class _NutritionScreenState extends State<NutritionScreen> {
                   const SizedBox(height: 3),
                   Text(
                     log.metaLabel,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 11,
                       color: AppColors.textSecondary,
                     ),
@@ -501,7 +501,7 @@ class _NutritionScreenState extends State<NutritionScreen> {
               children: [
                 Text(
                   '${_numberFormat.format(log.totalCalories.round())} kcal',
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w700,
                     color: AppColors.textTertiary,
@@ -510,7 +510,7 @@ class _NutritionScreenState extends State<NutritionScreen> {
                 if (log.servings > 1)
                   Text(
                     '${_formatNumber(log.servings)} servings',
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 10,
                       color: AppColors.textSecondary,
                     ),
@@ -564,7 +564,7 @@ class _NutritionScreenState extends State<NutritionScreen> {
       width: 52,
       height: 52,
       color: AppColors.barTrack,
-      child: const Icon(
+      child: Icon(
         Icons.restaurant_rounded,
         color: AppColors.textSecondary,
       ),
@@ -584,7 +584,7 @@ class _IconBoxButton extends StatelessWidget {
       color: AppColors.card,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(10),
-        side: const BorderSide(color: AppColors.cardBorder),
+        side: BorderSide(color: AppColors.cardBorder),
       ),
       child: InkWell(
         onTap: onTap,

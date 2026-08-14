@@ -11,6 +11,8 @@ class CoachSession {
   CoachExercise exercise = CoachExercise.pushup;
   final Map<CoachExercise, ExerciseAnalyzer> _analyzers = {};
   final Map<CoachExercise, AnalysisResult> _results = {};
+  final Map<CoachExercise, String> lastCues = {};
+  final Map<CoachExercise, bool> lastCueIsFix = {};
   bool preferLiveOnReturn = false;
 
   ExerciseAnalyzer analyzerFor(CoachExercise type) {

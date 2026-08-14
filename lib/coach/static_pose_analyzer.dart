@@ -5,7 +5,6 @@ import 'package:peakform_ai/coach/exercise_analyzer.dart';
 import 'package:peakform_ai/coach/feedback_manager.dart';
 
 abstract class StaticPoseAnalyzer extends ExerciseAnalyzer {
-  final _feedback = FeedbackManager();
   Duration _hold = Duration.zero;
   DateTime? _lastGoodFrame;
 
@@ -41,23 +40,19 @@ abstract class StaticPoseAnalyzer extends ExerciseAnalyzer {
       _lastGoodFrame = null;
     }
 
-    final decision = _feedback.evaluate(result.faults, now);
-
     return AnalysisResult(
       reps: 0,
       phase: result.phase,
       poseVisible: true,
       formGood: result.formGood,
-      cue: decision.message,
-      cueIsNew: decision.isNew,
       holdTime: _hold,
       angles: result.angles,
+      faults: result.faults,
     );
   }
 
   @override
   void reset() {
-    _feedback.reset();
     _hold = Duration.zero;
     _lastGoodFrame = null;
   }

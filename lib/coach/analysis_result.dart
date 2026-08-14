@@ -1,4 +1,5 @@
 import 'package:peakform_ai/coach/coach_joint_angle.dart';
+import 'package:peakform_ai/coach/feedback_manager.dart';
 
 /// Per-frame output from an [ExerciseAnalyzer].
 class AnalysisResult {
@@ -11,6 +12,7 @@ class AnalysisResult {
     this.cueIsNew = false,
     this.holdTime = Duration.zero,
     this.angles = const [],
+    this.faults = const [],
   });
 
   const AnalysisResult.waiting()
@@ -21,7 +23,8 @@ class AnalysisResult {
         cue = null,
         cueIsNew = false,
         holdTime = Duration.zero,
-        angles = const [];
+        angles = const [],
+        faults = const [];
 
   final int reps;
   final String phase;
@@ -31,4 +34,5 @@ class AnalysisResult {
   final bool cueIsNew;
   final Duration holdTime;
   final List<CoachJointAngle> angles;
+  final List<Fault> faults;
 }

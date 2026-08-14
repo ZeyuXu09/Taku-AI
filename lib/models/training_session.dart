@@ -11,6 +11,7 @@ class TrainingSession {
     required this.estimatedCalories,
     required this.programDescription,
     required this.sportSummary,
+    required this.focusBenefitsSummary,
     required this.intensity,
     required this.scheduledFocus,
     this.isRestDay = false,
@@ -27,6 +28,7 @@ class TrainingSession {
   final int estimatedCalories;
   final String programDescription;
   final String sportSummary;
+  final String focusBenefitsSummary;
   final TrainingIntensity intensity;
   final bool isRestDay;
 

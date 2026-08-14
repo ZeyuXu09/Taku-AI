@@ -6,10 +6,20 @@ import 'package:peakform_ai/theme/app_colors.dart';
 import 'package:peakform_ai/widgets/peak_bottom_nav.dart';
 
 class SportsSelectionScreen extends StatefulWidget {
-  const SportsSelectionScreen({super.key, this.onBack, this.onNavTap});
+  const SportsSelectionScreen({
+    super.key,
+    this.onBack,
+    this.onNavTap,
+    this.onCompleted,
+    this.isOnboarding = false,
+  });
 
   final VoidCallback? onBack;
   final ValueChanged<int>? onNavTap;
+  final VoidCallback? onCompleted;
+
+  /// When true (post-signup), hide back/nav and enter the app after Get Started.
+  final bool isOnboarding;
 
   @override
   State<SportsSelectionScreen> createState() => _SportsSelectionScreenState();
@@ -71,13 +81,17 @@ class _SportsSelectionScreenState extends State<SportsSelectionScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _IconBoxButton(
-                      icon: Icons.arrow_back_ios_new_rounded,
-                      size: 32,
-                      iconSize: 16,
-                      onTap: widget.onBack ?? () => Navigator.of(context).pop(),
-                    ),
-                    const SizedBox(height: 20),
+                    if (!widget.isOnboarding) ...[
+                      _IconBoxButton(
+                        icon: Icons.arrow_back_ios_new_rounded,
+                        size: 32,
+                        iconSize: 16,
+                        onTap:
+                            widget.onBack ?? () => Navigator.of(context).pop(),
+                      ),
+                      const SizedBox(height: 20),
+                    ] else
+                      const SizedBox(height: 8),
                     _buildBrandHeader(),
                     const SizedBox(height: 24),
                     _sectionTitle('Choose Your Sport'),
@@ -86,17 +100,21 @@ class _SportsSelectionScreenState extends State<SportsSelectionScreen> {
                     const SizedBox(height: 24),
                     _sectionTitle('Choose Your Intensity'),
                     const SizedBox(height: 12),
-                    ...List.generate(_intensityLevels.length, _buildIntensityItem),
+                    ...List.generate(
+                      _intensityLevels.length,
+                      _buildIntensityItem,
+                    ),
                     const SizedBox(height: 24),
                     _buildCta(context),
                   ],
                 ),
               ),
             ),
-            PeakBottomNav(
-              currentIndex: 4,
-              onTap: widget.onNavTap ?? (_) {},
-            ),
+            if (!widget.isOnboarding)
+              PeakBottomNav(
+                currentIndex: 4,
+                onTap: widget.onNavTap ?? (_) {},
+              ),
           ],
         ),
       ),
@@ -127,7 +145,7 @@ class _SportsSelectionScreenState extends State<SportsSelectionScreen> {
           child: const Icon(Icons.bolt_rounded, color: Colors.white, size: 22),
         ),
         const SizedBox(height: 12),
-        const Text(
+        Text(
           'PeakForm AI',
           style: TextStyle(
             fontSize: 22,
@@ -137,7 +155,7 @@ class _SportsSelectionScreenState extends State<SportsSelectionScreen> {
           ),
         ),
         const SizedBox(height: 4),
-        const Text(
+        Text(
           'Your AI Performance Coach',
           style: TextStyle(
             fontSize: 12,
@@ -151,7 +169,7 @@ class _SportsSelectionScreenState extends State<SportsSelectionScreen> {
   Widget _sectionTitle(String title) {
     return Text(
       title,
-      style: const TextStyle(
+      style: TextStyle(
         fontSize: 15,
         fontWeight: FontWeight.w700,
         color: AppColors.textPrimary,
@@ -277,13 +295,30 @@ class _SportsSelectionScreenState extends State<SportsSelectionScreen> {
                 ),
                 const SizedBox(width: 12),
                 Expanded(
-                  child: Text(
-                    label,
-                    style: const TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.textPrimary,
-                    ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        label,
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.textPrimary,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        switch (index) {
+                          0 => TrainingIntensity.casual.weeklyGoalLabel,
+                          2 => TrainingIntensity.professional.weeklyGoalLabel,
+                          _ => TrainingIntensity.serious.weeklyGoalLabel,
+                        },
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
                 Container(
@@ -298,7 +333,7 @@ class _SportsSelectionScreenState extends State<SportsSelectionScreen> {
                     ),
                   ),
                   child: selected
-                      ? const Icon(
+                      ? Icon(
                           Icons.check_rounded,
                           size: 14,
                           color: AppColors.background,
@@ -352,6 +387,11 @@ class _SportsSelectionScreenState extends State<SportsSelectionScreen> {
 
             if (!context.mounted) return;
 
+            if (widget.isOnboarding) {
+              widget.onCompleted?.call();
+              return;
+            }
+
             if (widget.onNavTap != null) {
               widget.onNavTap!(0);
             } else {
@@ -402,7 +442,7 @@ class _IconBoxButton extends StatelessWidget {
       color: AppColors.card,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(10),
-        side: const BorderSide(color: AppColors.cardBorder),
+        side: BorderSide(color: AppColors.cardBorder),
       ),
       child: InkWell(
         onTap: onTap,

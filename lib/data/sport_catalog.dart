@@ -1,3 +1,5 @@
+import 'package:peakform_ai/models/training_exercise.dart';
+
 /// Shared sport list for selection UI and training tag matching.
 class SportCatalog {
   SportCatalog._();
@@ -42,3 +44,47 @@ const sportPriorityTags = <String, List<String>>{
   'Other': ['general', 'mobility', 'strength'],
   'Basic Workout': ['general', 'mobility', 'strength', 'conditioning'],
 };
+
+/// Qualities a training focus is meant to build.
+const focusBenefitTags = <TrainingFocus, List<String>>{
+  TrainingFocus.power: ['plyometric', 'jumping', 'explosive', 'power'],
+  TrainingFocus.agility: [
+    'agility',
+    'lateral',
+    'change-direction',
+    'footwork',
+    'reaction',
+  ],
+  TrainingFocus.strength: ['strength', 'single-leg', 'shoulder', 'core'],
+  TrainingFocus.speed: ['speed', 'explosive', 'change-direction'],
+  TrainingFocus.endurance: ['endurance', 'conditioning'],
+  TrainingFocus.recovery: ['mobility', 'general'],
+  TrainingFocus.mixed: ['general', 'conditioning', 'strength', 'mobility'],
+};
+
+/// Sports that gain the most from this focus (not the user's selected sports).
+List<String> sportsThatBenefitFrom(TrainingFocus focus, {int limit = 4}) {
+  final tags = focusBenefitTags[focus] ?? const <String>[];
+  final ranked = <MapEntry<String, int>>[];
+
+  for (final entry in sportPriorityTags.entries) {
+    if (entry.key == 'Other' || entry.key == 'Basic Workout') continue;
+    var score = 0;
+    for (final tag in entry.value) {
+      if (tags.contains(tag)) score++;
+    }
+    if (score > 0) ranked.add(MapEntry(entry.key, score));
+  }
+
+  ranked.sort((a, b) => b.value.compareTo(a.value));
+  return ranked.take(limit).map((entry) => entry.key).toList();
+}
+
+String formatSportList(Iterable<String> sports) {
+  final list = sports.toList();
+  if (list.isEmpty) return '';
+  if (list.length == 1) return list.first;
+  if (list.length == 2) return '${list[0]} & ${list[1]}';
+  if (list.length == 3) return '${list[0]}, ${list[1]} & ${list[2]}';
+  return '${list.take(3).join(', ')} +${list.length - 3}';
+}

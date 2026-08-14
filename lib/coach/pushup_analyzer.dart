@@ -8,7 +8,6 @@ import 'package:peakform_ai/coach/rep_counter.dart';
 
 class PushupAnalyzer extends ExerciseAnalyzer {
   final _reps = RepCounter(enterTop: 75, enterBottom: 25);
-  final _feedback = FeedbackManager();
 
   @override
   bool get isStatic => false;
@@ -16,7 +15,6 @@ class PushupAnalyzer extends ExerciseAnalyzer {
   @override
   void reset() {
     _reps.reset();
-    _feedback.reset();
   }
 
   @override
@@ -42,19 +40,29 @@ class PushupAnalyzer extends ExerciseAnalyzer {
 
     final legsStraight = legAngle >= 160;
     final backStraight = backAngle >= 155;
-
-    final decision = _feedback.evaluate([
-      Fault('back', !backStraight, 'Keep your back straight'),
-      Fault('legs', !legsStraight, 'Straighten your legs'),
-    ], now);
+    final faults = [
+      Fault(
+        'back',
+        !backStraight,
+        'Keep your back straight',
+        detail:
+            'Your hips dropped on several reps. Keep a straight line from shoulders through heels — brace your core before you lower so your back does not sag.',
+      ),
+      Fault(
+        'legs',
+        !legsStraight,
+        'Straighten your legs',
+        detail:
+            'Your knees bent during the set. Lock your legs long and squeeze your quads so each push-up stays a full-body plank.',
+      ),
+    ];
 
     return AnalysisResult(
       reps: _reps.reps,
       phase: contraction >= 50 ? 'Down' : 'Up',
       poseVisible: true,
       formGood: legsStraight && backStraight,
-      cue: decision.message,
-      cueIsNew: decision.isNew,
+      faults: faults,
       angles: [
         CoachJointAngle('Elbow', elbowAngle, elbow),
         CoachJointAngle('Back', backAngle, hip),

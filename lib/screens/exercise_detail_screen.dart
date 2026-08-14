@@ -96,12 +96,12 @@ class ExerciseDetailScreen extends StatelessWidget {
             color: AppColors.card,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(10),
-              side: const BorderSide(color: AppColors.cardBorder),
+              side: BorderSide(color: AppColors.cardBorder),
             ),
             child: InkWell(
               onTap: () => Navigator.of(context).pop(),
               borderRadius: BorderRadius.circular(10),
-              child: const SizedBox(
+              child: SizedBox(
                 width: 36,
                 height: 36,
                 child: Icon(
@@ -116,7 +116,7 @@ class ExerciseDetailScreen extends StatelessWidget {
           Expanded(
             child: Text(
               title,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 19,
                 fontWeight: FontWeight.w700,
                 color: AppColors.textPrimary,
@@ -152,7 +152,7 @@ class ExerciseDetailScreen extends StatelessWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Icon(
+          Icon(
             Icons.fitness_center_rounded,
             size: 48,
             color: AppColors.textSecondary,
@@ -160,7 +160,7 @@ class ExerciseDetailScreen extends StatelessWidget {
           const SizedBox(height: 8),
           Text(
             name,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 14,
               fontWeight: FontWeight.w600,
               color: AppColors.textTertiary,
@@ -174,7 +174,7 @@ class ExerciseDetailScreen extends StatelessWidget {
   Widget _sectionTitle(String title) {
     return Text(
       title,
-      style: const TextStyle(
+      style: TextStyle(
         fontSize: 15,
         fontWeight: FontWeight.w700,
         color: AppColors.textPrimary,
@@ -215,7 +215,7 @@ class ExerciseDetailScreen extends StatelessWidget {
           Expanded(
             child: Text(
               text,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 13,
                 height: 1.5,
                 color: AppColors.textSecondary,
@@ -246,7 +246,7 @@ class ExerciseDetailScreen extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Icon(
+          Icon(
             Icons.lightbulb_outline_rounded,
             size: 18,
             color: AppColors.yellow,
@@ -255,7 +255,7 @@ class ExerciseDetailScreen extends StatelessWidget {
           Expanded(
             child: Text(
               notes,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 13,
                 height: 1.55,
                 color: AppColors.textSecondary,
@@ -282,7 +282,7 @@ class ExerciseDetailScreen extends StatelessWidget {
           const SizedBox(width: 6),
           Text(
             label,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 11,
               fontWeight: FontWeight.w600,
               color: AppColors.textTertiary,

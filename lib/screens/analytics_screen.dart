@@ -51,7 +51,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                     const SizedBox(height: 16),
                     _buildWeekChart(),
                     const SizedBox(height: 20),
-                    const Text(
+                    Text(
                       '🏆 Recent PRs',
                       style: TextStyle(
                         fontSize: 15,
@@ -87,7 +87,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
           iconSize: 16,
           onTap: widget.onBack ?? () => Navigator.of(context).pop(),
         ),
-        const Text(
+        Text(
           'Analytics',
           style: TextStyle(
             fontSize: 18,
@@ -186,7 +186,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
         children: [
           Text(
             label.toUpperCase(),
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 10,
               fontWeight: FontWeight.w700,
               color: AppColors.textSecondary,
@@ -201,7 +201,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
             color: color,
             center: Text(
               value,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 22,
                 fontWeight: FontWeight.w800,
                 color: AppColors.textPrimary,
@@ -233,7 +233,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
+          Text(
             'This Week',
             style: TextStyle(
               fontSize: 15,
@@ -284,7 +284,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                         const SizedBox(height: 8),
                         Text(
                           _weekDays[index],
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 10,
                             fontWeight: FontWeight.w600,
                             color: AppColors.textSecondary,
@@ -331,7 +331,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                 children: [
                   Text(
                     pr.name,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w700,
                       color: AppColors.textPrimary,
@@ -340,7 +340,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                   const SizedBox(height: 2),
                   Text(
                     pr.date,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 11,
                       color: AppColors.textSecondary,
                     ),
@@ -375,7 +375,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
+          Text(
             'Body Metrics',
             style: TextStyle(
               fontSize: 15,
@@ -452,7 +452,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                         const SizedBox(height: 6),
                         Text(
                           _metricLabels[index],
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 9,
                             fontWeight: FontWeight.w600,
                             color: AppColors.navInactive,
@@ -499,7 +499,7 @@ class _IconBoxButton extends StatelessWidget {
       color: AppColors.card,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(10),
-        side: const BorderSide(color: AppColors.cardBorder),
+        side: BorderSide(color: AppColors.cardBorder),
       ),
       child: InkWell(
         onTap: onTap,
