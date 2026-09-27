@@ -13,6 +13,8 @@ class TrainingLocationToggle extends StatelessWidget {
       builder: (context, prefs, _) {
         final location = prefs.location;
 
+        final narrow = MediaQuery.sizeOf(context).width < 390;
+
         return Container(
           decoration: BoxDecoration(
             color: AppColors.card,
@@ -26,12 +28,14 @@ class TrainingLocationToggle extends StatelessWidget {
                 label: 'Home',
                 icon: Icons.home_rounded,
                 selected: location == TrainingLocation.home,
+                compact: narrow,
                 onTap: () => _select(TrainingLocation.home),
               ),
               _Segment(
                 label: 'Gym',
                 icon: Icons.fitness_center_rounded,
                 selected: location == TrainingLocation.gym,
+                compact: narrow,
                 onTap: () => _select(TrainingLocation.gym),
               ),
             ],
@@ -52,11 +56,13 @@ class _Segment extends StatelessWidget {
     required this.icon,
     required this.selected,
     required this.onTap,
+    this.compact = false,
   });
 
   final String label;
   final IconData icon;
   final bool selected;
+  final bool compact;
   final VoidCallback onTap;
 
   @override
@@ -71,7 +77,10 @@ class _Segment extends StatelessWidget {
         borderRadius: BorderRadius.circular(9),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 180),
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          padding: EdgeInsets.symmetric(
+            horizontal: compact ? 8 : 10,
+            vertical: 8,
+          ),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(9),
             border: selected
@@ -86,15 +95,17 @@ class _Segment extends StatelessWidget {
                 size: 14,
                 color: selected ? AppColors.accent : AppColors.textSecondary,
               ),
-              const SizedBox(width: 4),
-              Text(
-                label,
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                  color: selected ? AppColors.accent : AppColors.textSecondary,
+              if (!compact) ...[
+                const SizedBox(width: 4),
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: selected ? AppColors.accent : AppColors.textSecondary,
+                  ),
                 ),
-              ),
+              ],
             ],
           ),
         ),

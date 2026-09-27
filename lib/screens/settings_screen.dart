@@ -3,6 +3,8 @@ import 'package:peakform_ai/app_navigator.dart';
 import 'package:peakform_ai/config/supabase_config.dart';
 import 'package:peakform_ai/screens/auth_gate.dart';
 import 'package:peakform_ai/services/auth_service.dart';
+import 'package:peakform_ai/services/game_notification_service.dart';
+import 'package:peakform_ai/services/game_schedule_service.dart';
 import 'package:peakform_ai/services/supabase_service.dart';
 import 'package:peakform_ai/services/user_profile_service.dart';
 import 'package:peakform_ai/services/theme_service.dart';
@@ -27,15 +29,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
   String _email = _fallbackEmail;
   String _units = _fallbackUnits;
 
-  bool _pushNotifications = true;
+  bool _pushNotifications = GameNotificationService.instance.pushEnabled.value;
   bool _workoutReminders = true;
-  bool _gameDayAlerts = false;
+  bool _gameDayAlerts =
+      GameNotificationService.instance.gameDayAlertsEnabled.value;
 
   @override
   void initState() {
     super.initState();
     _syncFromProfile();
     UserProfileService.instance.profile.addListener(_syncFromProfile);
+    GameNotificationService.instance.pushEnabled
+        .addListener(_syncNotificationToggles);
+    GameNotificationService.instance.gameDayAlertsEnabled
+        .addListener(_syncNotificationToggles);
     if (SupabaseConfig.isConfigured && SupabaseService.isSignedIn) {
       UserProfileService.instance.loadCurrentProfile();
     }
@@ -44,7 +51,32 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   void dispose() {
     UserProfileService.instance.profile.removeListener(_syncFromProfile);
+    GameNotificationService.instance.pushEnabled
+        .removeListener(_syncNotificationToggles);
+    GameNotificationService.instance.gameDayAlertsEnabled
+        .removeListener(_syncNotificationToggles);
     super.dispose();
+  }
+
+  void _syncNotificationToggles() {
+    if (!mounted) return;
+    setState(() {
+      _pushNotifications = GameNotificationService.instance.pushEnabled.value;
+      _gameDayAlerts =
+          GameNotificationService.instance.gameDayAlertsEnabled.value;
+    });
+  }
+
+  Future<void> _onPushNotificationsChanged(bool value) async {
+    await GameNotificationService.instance.setPushEnabled(value);
+    await GameNotificationService.instance
+        .sync(GameScheduleService.instance.games.value);
+  }
+
+  Future<void> _onGameDayAlertsChanged(bool value) async {
+    await GameNotificationService.instance.setGameDayAlertsEnabled(value);
+    await GameNotificationService.instance
+        .sync(GameScheduleService.instance.games.value);
   }
 
   void _syncFromProfile() {
@@ -125,7 +157,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         icon: Icons.notifications_none_rounded,
                         label: 'Push Notifications',
                         value: _pushNotifications,
-                        onChanged: (v) => setState(() => _pushNotifications = v),
+                        onChanged: _onPushNotificationsChanged,
                       ),
                       _SettingsToggleRow(
                         icon: Icons.schedule_rounded,
@@ -136,8 +168,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       _SettingsToggleRow(
                         icon: Icons.emoji_events_outlined,
                         label: 'Game Day Alerts',
+                        subtitle: 'One day before each scheduled game',
                         value: _gameDayAlerts,
-                        onChanged: (v) => setState(() => _gameDayAlerts = v),
+                        onChanged:
+                            _pushNotifications ? _onGameDayAlertsChanged : null,
+                      ),
+                      _SettingsRow(
+                        icon: Icons.lock_outline_rounded,
+                        iconColor: AppColors.green,
+                        iconBackground: AppColors.green.withValues(alpha: 0.12),
+                        label: 'Lock Screen Widget',
+                        value: 'Search PeakForm AI, then add Next Game',
+                        showChevron: false,
                         showDivider: false,
                       ),
                     ],),
@@ -577,14 +619,16 @@ class _SettingsToggleRow extends StatelessWidget {
     required this.label,
     required this.value,
     required this.onChanged,
+    this.subtitle,
     this.showDivider = true,
     this.prefsStyle = false,
   });
 
   final IconData icon;
   final String label;
+  final String? subtitle;
   final bool value;
-  final ValueChanged<bool> onChanged;
+  final ValueChanged<bool>? onChanged;
   final bool showDivider;
   final bool prefsStyle;
 
@@ -612,13 +656,28 @@ class _SettingsToggleRow extends StatelessWidget {
               ),
               const SizedBox(width: 12),
               Expanded(
-                child: Text(
-                  label,
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.textPrimary,
-                  ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      label,
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                    if (subtitle != null) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        subtitle!,
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
               ),
               Switch.adaptive(

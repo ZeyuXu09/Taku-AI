@@ -127,37 +127,42 @@ class _TrainingBody extends StatelessWidget {
 
   Widget _buildHeader(BuildContext context) {
     return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Row(
-          children: [
-            _IconBoxButton(
-              icon: Icons.arrow_back_ios_new_rounded,
-              size: 32,
-              iconSize: 16,
-              onTap: onBack ?? () => Navigator.of(context).maybePop(),
-            ),
-            const SizedBox(width: 10),
-            Text(
-              "Today's Training",
-              style: TextStyle(
-                fontSize: 19,
-                fontWeight: FontWeight.w700,
-                color: AppColors.textPrimary,
-                letterSpacing: -0.3,
-              ),
-            ),
-          ],
+        _IconBoxButton(
+          icon: Icons.arrow_back_ios_new_rounded,
+          size: 32,
+          iconSize: 16,
+          onTap: onBack ?? () => Navigator.of(context).maybePop(),
         ),
-        Row(
-          children: [
-            const TrainingLocationToggle(),
-            const SizedBox(width: 8),
-            _IconBoxButton(
-              icon: Icons.tune_rounded,
-              onTap: () => _openCustomize(context),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            "Today's Training",
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: 19,
+              fontWeight: FontWeight.w700,
+              color: AppColors.textPrimary,
+              letterSpacing: -0.3,
             ),
-          ],
+          ),
+        ),
+        const SizedBox(width: 8),
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.centerRight,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const TrainingLocationToggle(),
+              const SizedBox(width: 8),
+              _IconBoxButton(
+                icon: Icons.tune_rounded,
+                onTap: () => _openCustomize(context),
+              ),
+            ],
+          ),
         ),
       ],
     );

@@ -4,6 +4,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:peakform_ai/app_navigator.dart';
 import 'package:peakform_ai/config/supabase_config.dart';
 import 'package:peakform_ai/screens/auth_gate.dart';
+import 'package:peakform_ai/services/game_notification_service.dart';
 import 'package:peakform_ai/services/profile_avatar_service.dart';
 import 'package:peakform_ai/services/supabase_service.dart';
 import 'package:peakform_ai/services/theme_service.dart';
@@ -24,6 +25,7 @@ Future<void> main() async {
 
   await ProfileAvatarService.instance.initialize();
   await ThemeService.instance.load();
+  await GameNotificationService.instance.initialize();
 
   if (SupabaseConfig.isConfigured) {
     await SupabaseService.initialize();

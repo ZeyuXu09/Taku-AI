@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:peakform_ai/models/scheduled_game.dart';
+import 'package:peakform_ai/services/game_notification_service.dart';
 import 'package:peakform_ai/services/supabase_service.dart';
 import 'package:peakform_ai/services/user_profile_service.dart';
 import 'package:postgrest/postgrest.dart';
@@ -194,10 +195,6 @@ class GameScheduleService {
     await _persistLocalGames();
   }
 
-  void clear() {
-    games.value = [];
-  }
-
   String _defaultTeamName() {
     final profileName = UserProfileService.instance.displayName;
     if (profileName == 'Athlete') return 'My Team';
@@ -209,6 +206,7 @@ class GameScheduleService {
     final raw = prefs.getString(_localStorageKey);
     if (raw == null || raw.isEmpty) {
       games.value = [];
+      await GameNotificationService.instance.sync(const []);
       return;
     }
 
@@ -218,11 +216,18 @@ class GameScheduleService {
         .map(ScheduledGame.fromLocalMap)
         .toList()
       ..sort((a, b) => a.gameAt.compareTo(b.gameAt));
+    await GameNotificationService.instance.sync(games.value);
   }
 
   Future<void> _persistLocalGames() async {
     final prefs = await SharedPreferences.getInstance();
     final encoded = jsonEncode(games.value.map((g) => g.toLocalMap()).toList());
     await prefs.setString(_localStorageKey, encoded);
+    await GameNotificationService.instance.sync(games.value);
+  }
+
+  void clear() {
+    games.value = [];
+    GameNotificationService.instance.cancelAll();
   }
 }
