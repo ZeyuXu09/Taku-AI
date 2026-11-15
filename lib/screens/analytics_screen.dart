@@ -1,5 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:peakform_ai/models/body_metrics.dart';
+import 'package:peakform_ai/services/body_metrics_service.dart';
+import 'package:peakform_ai/services/training_preferences_service.dart';
+import 'package:peakform_ai/services/user_profile_service.dart';
+import 'package:peakform_ai/services/workout_log_service.dart';
 import 'package:peakform_ai/theme/app_colors.dart';
+import 'package:peakform_ai/utils/training_streak.dart';
 import 'package:peakform_ai/widgets/peak_bottom_nav.dart';
 import 'package:peakform_ai/widgets/progress_ring.dart';
 
@@ -18,16 +24,50 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
   int _metricTabIndex = 0;
 
   static const _timeframes = ['Week', 'Month', 'Season'];
-  static const _weekHeights = [0.55, 0.80, 0.45, 0.90, 0.70, 1.0, 0.35];
   static const _weekDays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-  static const _metricHeights = [0.70, 0.75, 0.72, 0.68, 0.65, 1.0];
-  static const _metricLabels = ['W1', 'W2', 'W3', 'W4', 'W5', 'W6'];
+  static const _monthLabels = ['W1', 'W2', 'W3', 'W4'];
+  static const _seasonLabels = ['M1', 'M2', 'M3', 'M4', 'M5', 'M6'];
 
-  static const _prs = [
-    _PrRecord('⬆️', 'Vertical Jump', 'Feb 12', '32 in'),
-    _PrRecord('⚡', '40-Yard Dash', 'Feb 10', '4.61s'),
-    _PrRecord('🏋️', 'Squat Max', 'Feb 08', '285 lbs'),
-  ];
+  @override
+  void initState() {
+    super.initState();
+    WorkoutLogService.instance.completedDays.addListener(_refresh);
+    BodyMetricsService.instance.metrics.addListener(_refresh);
+    BodyMetricsService.instance.history.addListener(_refresh);
+    BodyMetricsService.instance.hasUserMetrics.addListener(_refresh);
+    TrainingPreferencesService.instance.preferences.addListener(_refresh);
+    UserProfileService.instance.profile.addListener(_refresh);
+  }
+
+  @override
+  void dispose() {
+    WorkoutLogService.instance.completedDays.removeListener(_refresh);
+    BodyMetricsService.instance.metrics.removeListener(_refresh);
+    BodyMetricsService.instance.history.removeListener(_refresh);
+    BodyMetricsService.instance.hasUserMetrics.removeListener(_refresh);
+    TrainingPreferencesService.instance.preferences.removeListener(_refresh);
+    UserProfileService.instance.profile.removeListener(_refresh);
+    super.dispose();
+  }
+
+  void _refresh() {
+    if (mounted) setState(() {});
+  }
+
+  bool get _isMetric =>
+      UserProfileService.instance.displayUnits.toLowerCase().contains('metric');
+
+  List<DateTime> get _completedDays =>
+      WorkoutLogService.instance.completedDays.value
+          .map(trainingDateOnly)
+          .toSet()
+          .toList();
+
+  int get _weeklyGoal {
+    final goal = TrainingPreferencesService
+        .instance.preferences.value.intensity.sessionsPerWeek;
+    return goal < 1 ? 1 : goal;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -49,18 +89,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                     const SizedBox(height: 20),
                     _buildGaugeRow(),
                     const SizedBox(height: 16),
-                    _buildWeekChart(),
-                    const SizedBox(height: 20),
-                    Text(
-                      '🏆 Recent PRs',
-                      style: TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.textPrimary,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    ..._prs.map(_buildPrItem),
+                    _buildActivityChart(),
                     const SizedBox(height: 20),
                     _buildBodyMetrics(),
                   ],
@@ -96,7 +125,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
             letterSpacing: -0.3,
           ),
         ),
-        _IconBoxButton(icon: Icons.more_vert_rounded, onTap: () {}),
+        const SizedBox(width: 32),
       ],
     );
   }
@@ -140,15 +169,98 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
     );
   }
 
+  _LoadStats _loadStats() {
+    final now = DateTime.now();
+    final days = _completedDays;
+    final goal = _weeklyGoal;
+
+    late final int sessions;
+    late final int target;
+    switch (_timeframeIndex) {
+      case 1:
+        sessions = _sessionsInLastDays(days, now, 28);
+        target = goal * 4;
+      case 2:
+        sessions = _sessionsInLastDays(days, now, 180);
+        target = goal * 26;
+      default:
+        sessions = sessionsInWeek(days, mondayOf(now));
+        target = goal;
+    }
+
+    if (sessions == 0) {
+      return const _LoadStats(
+        progress: 0,
+        value: '0%',
+        status: 'No sessions',
+      );
+    }
+
+    final progress = (sessions / target).clamp(0.0, 1.0);
+    final percent = (progress * 100).round();
+    final status = sessions >= target
+        ? (sessions > target ? 'High' : 'On target')
+        : 'Building';
+    return _LoadStats(
+      progress: progress,
+      value: '$percent%',
+      status: status,
+    );
+  }
+
+  _RecoveryStats _recoveryStats() {
+    final days = _completedDays;
+    if (days.isEmpty) {
+      return const _RecoveryStats(
+        progress: 0,
+        value: '0%',
+        status: 'No sessions',
+      );
+    }
+
+    final last = days.reduce((a, b) => a.isAfter(b) ? a : b);
+    final restDays = trainingDateOnly(DateTime.now()).difference(last).inDays;
+
+    if (restDays <= 0) {
+      return const _RecoveryStats(
+        progress: 0.45,
+        value: '45%',
+        status: 'Recovering',
+      );
+    }
+    if (restDays == 1) {
+      return const _RecoveryStats(
+        progress: 0.70,
+        value: '70%',
+        status: 'Rebounding',
+      );
+    }
+    if (restDays == 2) {
+      return const _RecoveryStats(
+        progress: 0.85,
+        value: '85%',
+        status: 'Rested',
+      );
+    }
+    return const _RecoveryStats(
+      progress: 1,
+      value: '100%',
+      status: 'Well Rested',
+    );
+  }
+
   Widget _buildGaugeRow() {
+    final load = _loadStats();
+    final recovery = _recoveryStats();
+
     return Row(
       children: [
         Expanded(
           child: _gaugeCard(
             label: 'Training Load',
-            progress: 0.87,
-            value: '87%',
-            status: 'Optimal',
+            progress: load.progress,
+            value: load.value,
+            status: load.status,
             color: AppColors.green,
           ),
         ),
@@ -156,9 +268,9 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
         Expanded(
           child: _gaugeCard(
             label: 'Recovery',
-            progress: 0.92,
-            value: '92%',
-            status: 'Well Rested',
+            progress: recovery.progress,
+            value: recovery.value,
+            status: recovery.status,
             color: AppColors.accent,
             statusColor: AppColors.accentLight,
           ),
@@ -222,7 +334,39 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
     );
   }
 
-  Widget _buildWeekChart() {
+  Widget _buildActivityChart() {
+    final now = DateTime.now();
+    final days = _completedDays;
+    late final String title;
+    late final List<String> labels;
+    late final List<double> heights;
+
+    switch (_timeframeIndex) {
+      case 1:
+        title = 'Last 4 Weeks';
+        labels = _monthLabels;
+        heights = List.generate(4, (index) {
+          final monday = mondayOf(now).subtract(Duration(days: (3 - index) * 7));
+          return (sessionsInWeek(days, monday) / _weeklyGoal).clamp(0.0, 1.0);
+        });
+      case 2:
+        title = 'Last 6 Months';
+        labels = _seasonLabels;
+        heights = List.generate(6, (index) {
+          final month = DateTime(now.year, now.month - (5 - index), 1);
+          return (_sessionsInMonth(days, month) / (_weeklyGoal * 4))
+              .clamp(0.0, 1.0);
+        });
+      default:
+        title = 'This Week';
+        labels = _weekDays;
+        final monday = mondayOf(now);
+        heights = List.generate(7, (index) {
+          final day = monday.add(Duration(days: index));
+          return days.any((logged) => logged == day) ? 1.0 : 0.0;
+        });
+    }
+
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
@@ -234,7 +378,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'This Week',
+            title,
             style: TextStyle(
               fontSize: 15,
               fontWeight: FontWeight.w700,
@@ -246,7 +390,8 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
             height: 100,
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.end,
-              children: List.generate(_weekDays.length, (index) {
+              children: List.generate(labels.length, (index) {
+                final height = heights[index];
                 return Expanded(
                   child: Padding(
                     padding: EdgeInsets.only(left: index == 0 ? 0 : 3),
@@ -258,32 +403,29 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                             child: Container(
                               width: double.infinity,
                               constraints: const BoxConstraints(maxWidth: 28),
-                              height: 100 * _weekHeights[index],
+                              height: height <= 0 ? 6 : 100 * height,
                               decoration: BoxDecoration(
                                 borderRadius: const BorderRadius.vertical(
                                   top: Radius.circular(6),
                                 ),
-                                gradient: LinearGradient(
-                                  begin: Alignment.bottomCenter,
-                                  end: Alignment.topCenter,
-                                  colors: [
-                                    AppColors.accent,
-                                    AppColors.green,
-                                  ],
-                                ),
-                              ),
-                              foregroundDecoration: BoxDecoration(
-                                borderRadius: const BorderRadius.vertical(
-                                  top: Radius.circular(6),
-                                ),
-                                color: Colors.black.withValues(alpha: 0.15),
+                                color: height <= 0 ? AppColors.barTrack : null,
+                                gradient: height <= 0
+                                    ? null
+                                    : const LinearGradient(
+                                        begin: Alignment.bottomCenter,
+                                        end: Alignment.topCenter,
+                                        colors: [
+                                          AppColors.accent,
+                                          Color(0xFF00F5A0),
+                                        ],
+                                      ),
                               ),
                             ),
                           ),
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          _weekDays[index],
+                          labels[index],
                           style: TextStyle(
                             fontSize: 10,
                             fontWeight: FontWeight.w600,
@@ -302,68 +444,51 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
     );
   }
 
-  Widget _buildPrItem(_PrRecord pr) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        decoration: BoxDecoration(
-          color: AppColors.card,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: AppColors.cardBorder),
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 36,
-              height: 36,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: AppColors.yellow.withValues(alpha: 0.15),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Text(pr.emoji, style: const TextStyle(fontSize: 16)),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    pr.name,
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.textPrimary,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    pr.date,
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: AppColors.textSecondary,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Text(
-              pr.value,
-              style: const TextStyle(
-                fontSize: 15,
-                fontWeight: FontWeight.w800,
-                color: AppColors.accent,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   Widget _buildBodyMetrics() {
     const tabs = ['Weight', 'Body Fat', 'Muscle'];
+    final hasMetrics = BodyMetricsService.instance.hasUserMetrics.value;
+    final metrics = BodyMetricsService.instance.metrics.value;
+    final snapshots = BodyMetricsService.instance.history.value;
+    final points = snapshots.isNotEmpty
+        ? snapshots.sublist(
+            snapshots.length > 6 ? snapshots.length - 6 : 0,
+          )
+        : const <BodyMetricSnapshot>[];
+
+    String currentLabel;
+    String? changeLabel;
+    switch (_metricTabIndex) {
+      case 1:
+        currentLabel = '${metrics.bodyFatPercent.toStringAsFixed(1)}%';
+        changeLabel = _changeLabel(
+          current: metrics.bodyFatPercent,
+          previous: metrics.previousBodyFatPercent,
+          format: (value) => '${value.abs().toStringAsFixed(1)}%',
+        );
+      case 2:
+        currentLabel = _formatWeight(metrics.muscleMassLbs);
+        changeLabel = _changeLabel(
+          current: metrics.muscleMassLbs,
+          previous: metrics.previousMuscleMassLbs,
+          format: (value) => _formatWeight(value.abs()),
+        );
+      default:
+        currentLabel = _formatWeight(metrics.weightLbs);
+        changeLabel = _changeLabel(
+          current: metrics.weightLbs,
+          previous: metrics.previousWeightLbs,
+          format: (value) => _formatWeight(value.abs()),
+        );
+    }
+
+    final values = points.map((point) => point.valueFor(_metricTabIndex)).toList();
+    final maxValue = values.isEmpty
+        ? 1.0
+        : values.reduce((a, b) => a > b ? a : b);
+    final minValue = values.isEmpty
+        ? 0.0
+        : values.reduce((a, b) => a < b ? a : b);
+    final spread = (maxValue - minValue).abs();
 
     return Container(
       padding: const EdgeInsets.all(18),
@@ -423,61 +548,168 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
             }),
           ),
           const SizedBox(height: 16),
-          SizedBox(
-            height: 80,
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: List.generate(_metricLabels.length, (index) {
-                return Expanded(
-                  child: Padding(
-                    padding: EdgeInsets.only(left: index == 0 ? 0 : 3),
-                    child: Column(
-                      children: [
-                        Expanded(
-                          child: Align(
-                            alignment: Alignment.bottomCenter,
-                            child: Container(
-                              width: double.infinity,
-                              height: 80 * _metricHeights[index],
-                              decoration: BoxDecoration(
-                                color: AppColors.accent
-                                    .withValues(alpha: 0.35 + index * 0.08),
-                                borderRadius: const BorderRadius.vertical(
-                                  top: Radius.circular(4),
+          if (!hasMetrics)
+            _emptyMetricsHint()
+          else ...[
+            Text(
+              currentLabel,
+              style: TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.w800,
+                color: AppColors.textPrimary,
+              ),
+            ),
+            if (changeLabel != null) ...[
+              const SizedBox(height: 4),
+              Text(
+                changeLabel,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textSecondary,
+                ),
+              ),
+            ],
+            const SizedBox(height: 16),
+            SizedBox(
+              height: 80,
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: List.generate(points.length, (index) {
+                  final value = values[index];
+                  final height = spread < 0.05
+                      ? 0.72
+                      : 0.35 + 0.65 * ((value - minValue) / spread);
+                  final label = points.length == 2
+                      ? (index == 0 ? 'Last' : 'Now')
+                      : 'W${index + 1}';
+                  return Expanded(
+                    child: Padding(
+                      padding: EdgeInsets.only(left: index == 0 ? 0 : 3),
+                      child: Column(
+                        children: [
+                          Expanded(
+                            child: Align(
+                              alignment: Alignment.bottomCenter,
+                              child: Container(
+                                width: double.infinity,
+                                height: 80 * height,
+                                decoration: BoxDecoration(
+                                  color: AppColors.accent.withValues(
+                                    alpha: 0.35 + index * 0.08,
+                                  ),
+                                  borderRadius: const BorderRadius.vertical(
+                                    top: Radius.circular(4),
+                                  ),
                                 ),
                               ),
                             ),
                           ),
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          _metricLabels[index],
-                          style: TextStyle(
-                            fontSize: 9,
-                            fontWeight: FontWeight.w600,
-                            color: AppColors.navInactive,
+                          const SizedBox(height: 6),
+                          Text(
+                            label,
+                            style: TextStyle(
+                              fontSize: 9,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.navInactive,
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
-                  ),
-                );
-              }),
+                  );
+                }),
+              ),
             ),
-          ),
+          ],
         ],
       ),
     );
   }
+
+  Widget _emptyMetricsHint() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(vertical: 22, horizontal: 12),
+      decoration: BoxDecoration(
+        color: AppColors.barTrack,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Text(
+        'Add weight, body fat, and muscle in Growth Hub to track changes here.',
+        textAlign: TextAlign.center,
+        style: TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.w600,
+          color: AppColors.textSecondary,
+          height: 1.4,
+        ),
+      ),
+    );
+  }
+
+  String _formatWeight(double lbs) {
+    if (_isMetric) {
+      return '${(lbs * 0.45359237).toStringAsFixed(1)} kg';
+    }
+    return '${lbs % 1 == 0 ? lbs.toStringAsFixed(0) : lbs.toStringAsFixed(1)} lbs';
+  }
+
+  String? _changeLabel({
+    required double current,
+    required double? previous,
+    required String Function(double) format,
+  }) {
+    if (previous == null) return 'From Growth Hub';
+    final delta = current - previous;
+    if (delta.abs() < 0.05) return 'No change since last update';
+    final sign = delta > 0 ? '+' : '-';
+    return '$sign${format(delta)} since last update';
+  }
+
+  static int _sessionsInLastDays(
+    Iterable<DateTime> completedDays,
+    DateTime now,
+    int dayCount,
+  ) {
+    final end = trainingDateOnly(now);
+    final start = end.subtract(Duration(days: dayCount - 1));
+    return completedDays
+        .map(trainingDateOnly)
+        .where((day) => !day.isBefore(start) && !day.isAfter(end))
+        .length;
+  }
+
+  static int _sessionsInMonth(Iterable<DateTime> completedDays, DateTime month) {
+    return completedDays
+        .map(trainingDateOnly)
+        .where((day) => day.year == month.year && day.month == month.month)
+        .length;
+  }
 }
 
-class _PrRecord {
-  const _PrRecord(this.emoji, this.name, this.date, this.value);
+class _LoadStats {
+  const _LoadStats({
+    required this.progress,
+    required this.value,
+    required this.status,
+  });
 
-  final String emoji;
-  final String name;
-  final String date;
+  final double progress;
   final String value;
+  final String status;
+}
+
+class _RecoveryStats {
+  const _RecoveryStats({
+    required this.progress,
+    required this.value,
+    required this.status,
+  });
+
+  final double progress;
+  final String value;
+  final String status;
 }
 
 class _IconBoxButton extends StatelessWidget {

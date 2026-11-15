@@ -298,13 +298,15 @@ void main() {
     expect(find.text('Update Height & Body Metrics'), findsOneWidget);
   });
 
-  testWidgets('Analytics screen shows gauges and PRs', (tester) async {
+  testWidgets('Analytics screen shows live load and body metrics', (tester) async {
     await tester.pumpWidget(const MaterialApp(home: AnalyticsScreen()));
     await tester.pump();
 
-    expect(find.text('Optimal'), findsOneWidget);
-    expect(find.text('Vertical Jump'), findsOneWidget);
+    expect(find.text('No sessions'), findsWidgets);
+    expect(find.text('0%'), findsWidgets);
     expect(find.text('This Week'), findsOneWidget);
+    expect(find.text('Body Metrics'), findsOneWidget);
+    expect(find.text('Vertical Jump'), findsNothing);
   });
 
   testWidgets('Sports selection shows sport grid', (tester) async {

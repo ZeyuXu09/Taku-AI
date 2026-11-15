@@ -342,7 +342,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       iconColor: AppColors.accent,
                       iconBackground: AppColors.accent.withValues(alpha: 0.2),
                       title: 'Analytics',
-                      description: 'Training load, recovery & PRs',
+                      description: 'Training load, recovery & body metrics',
                       onTap: () {
                         _pushSubScreen(
                           context,

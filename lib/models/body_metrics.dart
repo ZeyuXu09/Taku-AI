@@ -1,3 +1,52 @@
+class BodyMetricSnapshot {
+  const BodyMetricSnapshot({
+    required this.at,
+    required this.weightLbs,
+    required this.bodyFatPercent,
+    required this.muscleMassLbs,
+  });
+
+  final DateTime at;
+  final double weightLbs;
+  final double bodyFatPercent;
+  final double muscleMassLbs;
+
+  Map<String, dynamic> toJson() => {
+        'at': at.toIso8601String(),
+        'weightLbs': weightLbs,
+        'bodyFatPercent': bodyFatPercent,
+        'muscleMassLbs': muscleMassLbs,
+      };
+
+  factory BodyMetricSnapshot.fromJson(Map<String, dynamic> json) {
+    double asDouble(dynamic value, double fallback) {
+      if (value is num) return value.toDouble();
+      if (value is String) return double.tryParse(value) ?? fallback;
+      return fallback;
+    }
+
+    return BodyMetricSnapshot(
+      at: DateTime.tryParse(json['at'] as String? ?? '') ?? DateTime.now(),
+      weightLbs: asDouble(json['weightLbs'], BodyMetrics.defaults.weightLbs),
+      bodyFatPercent:
+          asDouble(json['bodyFatPercent'], BodyMetrics.defaults.bodyFatPercent),
+      muscleMassLbs:
+          asDouble(json['muscleMassLbs'], BodyMetrics.defaults.muscleMassLbs),
+    );
+  }
+
+  double valueFor(int metricTabIndex) {
+    switch (metricTabIndex) {
+      case 1:
+        return bodyFatPercent;
+      case 2:
+        return muscleMassLbs;
+      default:
+        return weightLbs;
+    }
+  }
+}
+
 class BodyMetrics {
   const BodyMetrics({
     required this.heightInches,

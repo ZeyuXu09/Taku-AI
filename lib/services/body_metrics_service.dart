@@ -12,9 +12,12 @@ class BodyMetricsService {
   static final BodyMetricsService instance = BodyMetricsService._();
 
   static const _localKey = 'body_metrics';
+  static const _historyKey = 'body_metrics_history';
 
   final ValueNotifier<BodyMetrics> metrics =
       ValueNotifier(BodyMetrics.defaults);
+  final ValueNotifier<List<BodyMetricSnapshot>> history = ValueNotifier([]);
+  final ValueNotifier<bool> hasUserMetrics = ValueNotifier(false);
 
   Future<void> load() async {
     if (SupabaseService.isSignedIn) {
@@ -31,9 +34,10 @@ class BodyMetricsService {
             .eq('id', userId)
             .maybeSingle();
 
-        if (row != null && row['height_inches'] != null) {
+        if (row != null && row['weight_lbs'] != null) {
           final loaded = BodyMetrics(
-            heightInches: _asDouble(row['height_inches'])!,
+            heightInches:
+                _asDouble(row['height_inches']) ?? BodyMetrics.defaults.heightInches,
             weightLbs: _asDouble(row['weight_lbs']) ?? BodyMetrics.defaults.weightLbs,
             bodyFatPercent: _asDouble(row['body_fat_percent']) ??
                 BodyMetrics.defaults.bodyFatPercent,
@@ -45,7 +49,9 @@ class BodyMetricsService {
             previousMuscleMassLbs: _asDouble(row['prev_muscle_mass_lbs']),
           );
           metrics.value = loaded;
+          hasUserMetrics.value = true;
           await _saveLocal(loaded);
+          await _loadHistory(loaded);
           return;
         }
       } catch (_) {
@@ -66,7 +72,9 @@ class BodyMetricsService {
     );
 
     metrics.value = withHistory;
+    hasUserMetrics.value = true;
     await _saveLocal(withHistory);
+    await _appendHistory(withHistory);
     await _syncRemote(withHistory);
   }
 
@@ -75,13 +83,20 @@ class BodyMetricsService {
     final raw = prefs.getString(_localKey);
     if (raw == null) {
       metrics.value = BodyMetrics.defaults;
+      hasUserMetrics.value = false;
+      history.value = [];
       return;
     }
     try {
-      metrics.value =
+      final loaded =
           BodyMetrics.fromJson(jsonDecode(raw) as Map<String, dynamic>);
+      metrics.value = loaded;
+      hasUserMetrics.value = true;
+      await _loadHistory(loaded);
     } catch (_) {
       metrics.value = BodyMetrics.defaults;
+      hasUserMetrics.value = false;
+      history.value = [];
     }
   }
 
@@ -119,7 +134,89 @@ class BodyMetricsService {
     return null;
   }
 
+  Future<void> _loadHistory(BodyMetrics loaded) async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(_historyKey);
+    if (raw != null && raw.isNotEmpty) {
+      try {
+        final list = (jsonDecode(raw) as List)
+            .whereType<Map>()
+            .map((item) =>
+                BodyMetricSnapshot.fromJson(Map<String, dynamic>.from(item)))
+            .toList()
+          ..sort((a, b) => a.at.compareTo(b.at));
+        if (list.isNotEmpty) {
+          history.value = list;
+          return;
+        }
+      } catch (_) {
+        // Fall through and rebuild from current / previous values.
+      }
+    }
+    history.value = _synthesizeHistory(loaded);
+  }
+
+  Future<void> _appendHistory(BodyMetrics value) async {
+    final now = DateTime.now();
+    final snap = BodyMetricSnapshot(
+      at: now,
+      weightLbs: value.weightLbs,
+      bodyFatPercent: value.bodyFatPercent,
+      muscleMassLbs: value.muscleMassLbs,
+    );
+
+    var list = [...history.value];
+    if (list.isEmpty && value.previousWeightLbs != null) {
+      list = _synthesizeHistory(value);
+    }
+
+    if (list.isNotEmpty && _sameDay(list.last.at, now)) {
+      list[list.length - 1] = snap;
+    } else {
+      list.add(snap);
+    }
+
+    history.value = list;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(
+      _historyKey,
+      jsonEncode(list.map((item) => item.toJson()).toList()),
+    );
+  }
+
+  List<BodyMetricSnapshot> _synthesizeHistory(BodyMetrics metrics) {
+    if (!hasUserMetrics.value) return [];
+    final now = DateTime.now();
+    final points = <BodyMetricSnapshot>[];
+    if (metrics.previousWeightLbs != null) {
+      points.add(
+        BodyMetricSnapshot(
+          at: now.subtract(const Duration(days: 7)),
+          weightLbs: metrics.previousWeightLbs!,
+          bodyFatPercent:
+              metrics.previousBodyFatPercent ?? metrics.bodyFatPercent,
+          muscleMassLbs:
+              metrics.previousMuscleMassLbs ?? metrics.muscleMassLbs,
+        ),
+      );
+    }
+    points.add(
+      BodyMetricSnapshot(
+        at: now,
+        weightLbs: metrics.weightLbs,
+        bodyFatPercent: metrics.bodyFatPercent,
+        muscleMassLbs: metrics.muscleMassLbs,
+      ),
+    );
+    return points;
+  }
+
+  static bool _sameDay(DateTime a, DateTime b) =>
+      a.year == b.year && a.month == b.month && a.day == b.day;
+
   void clear() {
     metrics.value = BodyMetrics.defaults;
+    history.value = [];
+    hasUserMetrics.value = false;
   }
 }
